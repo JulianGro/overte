@@ -15,7 +15,6 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Install dependencies
-      working-directory: tools/doxygen
       run: |
         sudo apt update
         sudo apt install doxygen
@@ -24,6 +23,7 @@ jobs:
       working-directory: tools/doxygen
       shell: bash
       run: |
+        mkdir -p ../../build/docs/html
         doxygen Doxyfile
 
     - name: Deploy Doxygen
