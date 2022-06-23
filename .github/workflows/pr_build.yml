@@ -385,7 +385,8 @@ jobs:
 
     - name: Export Docker runtime image
       run : |
-        if [[ "$(uname -m)" = "x86_64" ]]; then
+        echo $(uname -m)
+        if [ "$(uname -m)" = "x86_64" ]; then
           echo "Exporting image.."
           docker image save -o overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
           echo "Compressing with xz.."
