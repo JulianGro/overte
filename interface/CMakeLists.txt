@@ -21,7 +21,7 @@ set(CUSTOM_INTERFACE_QRC_PATHS "")
 
 find_package(
   Qt5 COMPONENTS
-  Gui Widgets Multimedia Network Qml Quick Script Svg
+  Gui Widgets Multimedia Network Qml Quick Script Svg WebEngineCore WebEngineWidgets
   ${PLATFORM_QT_COMPONENTS}
   WebChannel WebSockets
 )
@@ -292,7 +292,7 @@ target_link_libraries(
   ${TARGET_NAME}
   Qt5::Gui Qt5::Network Qt5::Multimedia Qt5::Widgets
   Qt5::Qml Qt5::Quick Qt5::Script Qt5::Svg
-  Qt5::WebChannel
+  Qt5::WebChannel Qt5::WebEngineCore Qt5::WebEngineWidgets
   ${PLATFORM_QT_LIBRARIES}
 )
 
@@ -394,12 +394,6 @@ else()
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       "${PROJECT_SOURCE_DIR}/resources/serverless/redirect.json"
       "${RESOURCES_DEV_DIR}/serverless/redirect.json"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-      "${PROJECT_SOURCE_DIR}/resources/serverless/Fonts"
-      "${RESOURCES_DEV_DIR}/serverless/Fonts"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-      "${PROJECT_SOURCE_DIR}/resources/serverless/Scripts"
-      "${RESOURCES_DEV_DIR}/serverless/Scripts"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       "${RESOURCES_RCC}"
       "${INTERFACE_EXEC_DIR}/resources.rcc"
