@@ -321,6 +321,8 @@ jobs:
       run: cat ./_CPack_Packages/win64/NSIS/NSISOutput.log
 
     - name: Upload Artifact
+      # Linux archives are currently dummies
+      if: startsWith(matrix.os, 'windows') || startsWith(matrix.os, 'macOS') || matrix.build_type == 'android'
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env:
