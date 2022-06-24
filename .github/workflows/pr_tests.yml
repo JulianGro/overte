@@ -47,7 +47,6 @@ jobs:
         echo "VIRCADIA_OPTIMIZE=false" >> $GITHUB_ENV
         # Linux build variables
         if [[ "${{ matrix.os }}" = "ubuntu-"* || "${{ matrix.os }}" = *"debian"* ]]; then
-          echo "PYTHON_EXEC=python3" >> $GITHUB_ENV
           echo "CMAKE_BUILD_EXTRA=-- -j$(nproc)" >> $GITHUB_ENV
           # Variables specific to our aarch64 runner
           if [ "${{ matrix.os }}" = "self-hosted_debian-11_aarch64" ]; then
@@ -61,12 +60,10 @@ jobs:
         fi
         # Mac build variables
         if [ "${{ matrix.os }}" = "macOS-"* ]; then
-          echo "PYTHON_EXEC=python3" >> $GITHUB_ENV
           echo "CMAKE_EXTRA=-DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=OFF -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib -G Xcode" >> $GITHUB_ENV
         fi
         # Windows build variables
         if [ "${{ matrix.os }}" = "windows-"* ]; then
-          echo "PYTHON_EXEC=python" >> $GITHUB_ENV
           echo "CMAKE_EXTRA=-A x64" >> $GITHUB_ENV
         fi
 
@@ -88,10 +85,15 @@ jobs:
         if [[ "${{ matrix.os }}" =~ "ubuntu" || "${{ matrix.os }}" =~ "debian" ]]; then
 
           echo "Updating apt repository index"
-          sudo apt update || exit 1
+          sudo apt-get update || exit 1
+
+          if [[ "${{ matrix.os }}" =~ "ubuntu-22.04" ]]; then
+            echo "Upgrade existing packages"
+            sudo apt-get dist-upgrade -y || exit 1
+          fi
 
           echo "Installing apt packages"
-          sudo apt install -y ${{ matrix.apt-dependencies }} || exit 1
+          sudo apt-get install -y ${{ matrix.apt-dependencies }} || exit 1
 
         else # macOS
           echo "Downloading MacOSX10.12 SDK.."
@@ -109,17 +111,12 @@ jobs:
           echo "  done"
         fi
 
-    - name: Install Python modules
-      if: startsWith(matrix.os, 'windows') || startsWith(matrix.os, 'macOS')
-      shell: bash
-      run: $PYTHON_EXEC -m pip install boto3 PyGithub
-
     - name: Create Build Environment
       shell: bash
-      run: cmake -E make_directory ./build
+      run: cmake -E make_directory build
 
     - name: Configure CMake
-      working-directory: ./build
+      working-directory: build
       shell: bash
       run: cmake .. -DVCPKG_BUILD_TYPE=release -DBUILD_TESTS=ON -DBUILD_SERVER=OFF -DBUILD_CLIENT=OFF -DBUILD_TOOLS=OFF -DBUILD_INSTALLER=OFF -DVCPKG_BUILD_TYPE=release $CMAKE_EXTRA
 
@@ -147,18 +144,18 @@ jobs:
         if-no-files-found: error
 
     - name: Build Tests
-      working-directory: ./build
+      working-directory: build
       shell: bash
       run: cmake --build . --target all-tests $CMAKE_BUILD_EXTRA
 
     - name: Run Tests
-      working-directory: ./build
+      working-directory: build
       shell: bash
       run: cmake --build . --target test $CMAKE_BUILD_EXTRA
 
     - name: Output system stats
       if: ${{ always() }}
-      working-directory: ./build
+      working-directory: build
       shell: bash
       run: |
         echo "Disk usage:"
