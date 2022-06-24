@@ -56,3 +56,42 @@ jobs:
         GITHUB_CONTEXT: ${{ toJson(github) }}
       run: |
         python3 "$GITHUB_WORKSPACE/tools/ci-scripts/upload_to_publish_server.py"
+
+  build_pr2:
+    name: "${{matrix.os}}, ${{matrix.build_type}}"
+    strategy:
+        matrix:
+          include:
+            - os: ubuntu-20.04
+    runs-on: ${{matrix.os}}
+    steps:
+    - name: Configure Build Environment 1
+      shell: bash
+      id: buildenv1
+      run: |
+        echo ::set-output name=github_sha_short::`echo $GIT_COMMIT | cut -c1-7`
+        echo "JOB_NAME=${{matrix.os}}, ${{matrix.build_type}}" >> $GITHUB_ENV
+
+    # Configuration is broken into two steps because you can't set an env var and also reference it in the same step
+    - name: Configure Build Environment 2
+      shell: bash
+      run: |
+        echo "ARTIFACT_PATTERN=test_${{ steps.buildenv1.outputs.github_sha_short }}.txt" >> $GITHUB_ENV
+
+    - uses: actions/checkout@v1
+      with:
+        submodules: false
+        fetch-depth: 1
+
+    - name: Create Test file
+      shell: bash
+      run: echo "test2" >> test2_${{ steps.buildenv1.outputs.github_sha_short }}.txt
+
+
+
+    - name: Upload Artifact
+      shell: bash
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: |
+        python3 "$GITHUB_WORKSPACE/tools/ci-scripts/upload_to_publish_server.py"
