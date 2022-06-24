@@ -16,7 +16,9 @@ env:
   RELEASE_TYPE: PRODUCTION
   RELEASE_NUMBER: ${{ github.run_number }}
   STABLE_BUILD: 0
-  UPLOAD_BUCKET: athena-public
+  UPLOAD_BUCKET: overte-public
+  UPLOAD_REGION: fra1
+  UPLOAD_ENDPOINT: "https://fra1.digitaloceanspaces.com"
 
   # OSX-specific variables
   DEVELOPER_DIR: /Applications/Xcode_11.2.app/Contents/Developer
@@ -31,25 +33,29 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macOS-10.15, ubuntu-18.04]
-        # build_type: [full, client]
-        build_type: [full]
         include:
+          - os: windows-2019
+            build_type: full
+          - os: macOS-10.15
+            build_type: full
           - os: ubuntu-18.04
             build_type: full
-            apt-dependencies: mesa-common-dev libegl1 libglvnd-dev libdouble-conversion1 libpulse0 libsnappy1v5 libwebpdemux2 libwebpmux3
+            apt-dependencies: mesa-common-dev libegl1 libglvnd-dev libdouble-conversion1 libpulse0 libsnappy1v5 libwebpdemux2 libwebpmux3 python3-github python3-distro
       fail-fast: false
     runs-on: ${{matrix.os}}
     steps:
     - name: Report Build Number
       shell: bash
       run: |
+
         echo "Build number: $BUILD_NUMBER"
+
     - name: Configure build environment 1
       shell: bash
       id: buildenv1
       run: |
-        echo "UPLOAD_PREFIX=master" >> $GITHUB_ENV
+
+        echo "UPLOAD_PREFIX=build/overte/master" >> $GITHUB_ENV
         echo ::set-output name=github_sha_short::`echo $GIT_COMMIT | cut -c1-7`
         echo "JOB_NAME=build (${{matrix.os}}, ${{matrix.build_type}})" >> $GITHUB_ENV
         echo "APP_TARGET_NAME=$APP_NAME" >> $GITHUB_ENV
@@ -57,8 +63,8 @@ jobs:
         if [[ "${{ matrix.os }}" = "ubuntu-"* ]]; then
           echo "PYTHON_EXEC=python3" >> $GITHUB_ENV
           echo "INSTALLER_EXT=tgz" >> $GITHUB_ENV
-          echo "CMAKE_BUILD_EXTRA=-- -j3" >> $GITHUB_ENV
-          echo "CMAKE_EXTRA=-DVIRCADIA_CPU_ARCHITECTURE= -DBUILD_TOOLS:BOOLEAN=FALSE -DHIFI_PYTHON_EXEC:FILEPATH=$(which python3)" >> $GITHUB_ENV
+          echo "CMAKE_BUILD_EXTRA=-- -j$(nproc)" >> $GITHUB_ENV
+          echo "CMAKE_EXTRA=-DVIRCADIA_CPU_ARCHITECTURE=-msse3 -DBUILD_TOOLS:BOOLEAN=FALSE -DHIFI_PYTHON_EXEC:FILEPATH=$(which python3)" >> $GITHUB_ENV
         fi
         # Mac build variables
         if [ "${{ matrix.os }}" = "macOS-10.15" ]; then
@@ -71,7 +77,7 @@ jobs:
           echo "APP_TARGET_NAME=Vircadia" >> $GITHUB_ENV
         fi
         # Windows build variables
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+        if [ "${{ matrix.os }}" = "windows-2019" ]; then
           echo "PYTHON_EXEC=python" >> $GITHUB_ENV
           echo "ZIP_COMMAND=7z" >> $GITHUB_ENV
           echo "ZIP_ARGS=a" >> $GITHUB_ENV
@@ -86,16 +92,17 @@ jobs:
     - name: Configure build environment 2
       shell: bash
       run: |
+
         echo "${{ steps.buildenv1.outputs.symbols_archive }}"
-        echo "ARTIFACT_PATTERN=Vircadia-*.$INSTALLER_EXT" >> $GITHUB_ENV
-        # Build type variables
+        echo "ARTIFACT_PATTERN=Overte-*.$INSTALLER_EXT" >> $GITHUB_ENV
         echo "GIT_COMMIT_SHORT=${{ steps.buildenv1.outputs.github_sha_short }}" >> $GITHUB_ENV
+        # Build type variables
         if [ "${{ matrix.build_type }}" = "full" ]; then
           echo "CLIENT_ONLY=FALSE" >> $GITHUB_ENV
-          echo "INSTALLER=Vircadia-$BUILD_NUMBER-$GIT_COMMIT_SHORT.$INSTALLER_EXT" >> $GITHUB_ENV
+          echo "INSTALLER=Overte-master$BUILD_NUMBER-${{ steps.buildenv1.outputs.github_sha_short }}.$INSTALLER_EXT" >> $GITHUB_ENV
         else
           echo "CLIENT_ONLY=TRUE" >> $GITHUB_ENV
-          echo "INSTALLER=Vircadia-Interface-$BUILD_NUMBER-$GIT_COMMIT_SHORT.$INSTALLER_EXT" >> $GITHUB_ENV
+          echo "INSTALLER=Overte-Interface-master$BUILD_NUMBER-${{ steps.buildenv1.outputs.github_sha_short }}.$INSTALLER_EXT" >> $GITHUB_ENV
         fi
     - name: Clear working directory
       if: startsWith(matrix.os, 'windows')
@@ -112,17 +119,19 @@ jobs:
       if: startsWith(matrix.os, 'ubuntu') || contains(matrix.os, 'debian') || startsWith(matrix.os, 'macOS')
       run: |
         if [[ "${{ matrix.os }}" =~ "ubuntu" || "${{ matrix.os }}" =~ "debian" ]]; then
-          echo "Installing Python Modules:"
-          pip3 install distro || exit 1
 
           echo "Updating apt repository index"
           sudo apt update || exit 1
 
           echo "Installing apt packages"
           sudo apt install -y ${{ matrix.apt-dependencies }} || exit 1
+
+          echo "Installing Python Modules"
+          pip3 install boto3 || exit 1
+
         else # macOS
           echo "Downloading MacOSX10.12 SDK.."
-          curl --progress-bar -L -o macOS_SDK10.12.4.tar.xz "https://cloudflare-ipfs.com/ipfs/QmTDLEYdo616YgZKSYC2mySSw8EKQWTz7CH8UyMupMBpzK?filename=macOS_SDK10.12.4.tar.xz" || exit 1
+          curl --progress-bar -L -o macOS_SDK10.12.4.tar.xz "https://data.moto9000.moe/overte_packages/macOS_SDK10.12.4.tar.xz" || exit 1
           echo "  done\n"
           echo "Checking MacOSX10.12 SDK.."
           echo "c00e03cb64bed8d0d75d7a01c93de094b6ffaa3bc3318e7b29a9bdc354f0e29e363c454b7db89db8a3b78e9702668d1c661f1af279807de8db11accecb0ca498  macOS_SDK10.12.4.tar.xz" >> macOS_SDK10.12.4.tar.xz.checksum
@@ -223,12 +232,11 @@ jobs:
       run: cat ./_CPack_Packages/win64/NSIS/NSISOutput.log
 
     - name: Upload artifact
-      if: startsWith(matrix.os, 'windows') || startsWith(matrix.os, 'macOS')
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.s3_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_secret_access_key }}
       run: $PYTHON_EXEC $GITHUB_WORKSPACE/tools/ci-scripts/upload.py
 
     #- name: Archive symbols
@@ -259,3 +267,85 @@ jobs:
     #  with:
     #    name: symbols
     #    path: ${{runner.workspace}}/${{ steps.buildenv1.outputs.symbols_archive }}
+
+  build_docker_server:
+    name: "${{matrix.os}}, Debian Docker"
+    container: docker.io/juliangro/overte-server-build:0.1
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-20.04
+          # Do not change the names of self-hosted runners without knowing what you are doing, as they correspond to labels that have to be set on the runner.
+          # - os: self-hosted_debian-11_aarch64
+      fail-fast: false
+    runs-on: ${{matrix.os}}
+    steps:
+    - name: Report Build Number
+      shell: bash
+      run: |
+        echo "Build number: $BUILD_NUMBER"
+
+    - uses: actions/checkout@v1
+      with:
+        submodules: false
+        fetch-depth: 1
+
+    - name: Create build environment
+      shell: bash
+      run: |
+        mkdir build
+        echo "UPLOAD_PREFIX=build/overte/master" >> $GITHUB_ENV
+
+    - name: Configure CMake
+      working-directory: ./build
+      run: |
+        if [[ "$(uname -m)" = "x86_64" ]]; then
+          VIRCADIA_USE_SYSTEM_QT=1 STABLE_BUILD=0 cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE=-msse3 -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
+        else
+          VIRCADIA_USE_SYSTEM_QT=1 STABLE_BUILD=0 cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE= -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
+        fi
+
+    - name: Build Domain Server
+      working-directory: ./build
+      shell: bash
+      run: make -j$(nproc) domain-server
+
+    - name: Build Assignment Client
+      working-directory: ./build
+      shell: bash
+      run: make -j$(nproc) assignment-client
+
+    - name: Create Docker runtime image
+      run: docker build -t overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER" -f tools/ci-scripts/docker_package/Dockerfile_runtime .
+
+    - name: Export Docker runtime image
+      run : |
+        if [[ "$(uname -m)" = "x86_64" ]]; then
+          echo "Exporting image.."
+          docker image save -o overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
+          echo "Compressing with xz..
+          xz -z -T0 overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar
+          echo "Done."
+          echo "ARTIFACT_PATTERN=overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar.xz" >> $GITHUB_ENV
+        else
+          echo "Exporting image.."
+          docker image save -o overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
+          echo "Compressing with xz..
+          xz -z -T0 overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar
+          echo "Done."
+          echo "ARTIFACT_PATTERN=overte-server-master${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar.xz" >> $GITHUB_ENV
+        fi
+
+    - name: Output system stats
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        echo "Disk usage:"
+        df -h
+
+    - name: Upload artifact
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.s3_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_secret_access_key }}
+      run: python3 ./tools/ci-scripts/upload.py
