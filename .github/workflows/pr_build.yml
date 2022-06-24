@@ -355,11 +355,13 @@ jobs:
         fetch-depth: 1
 
     - name: Create build environment
+      id: env1
       shell: bash
       run: |
         mkdir build
         echo "UPLOAD_PREFIX=build/overte/experimental" >> $GITHUB_ENV
         echo "JOB_NAME=${{matrix.os}}, ${{matrix.build_type}}" >> $GITHUB_ENV
+        echo ::set-output name=github_sha_short::`echo $GIT_COMMIT | cut -c1-7`
 
     - name: Configure CMake
       working-directory: ./build
@@ -388,18 +390,18 @@ jobs:
         echo $(uname -m)
         if [ "$(uname -m)" = "x86_64" ]; then
           echo "Exporting image.."
-          docker image save -o overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
+          docker image save -o overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-amd64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
           echo "Compressing with xz.."
-          xz -z -T0 overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar
+          xz -z -T0 overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-amd64.tar
           echo "Done."
-          echo "ARTIFACT_PATTERN=overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-amd64.tar.xz" >> $GITHUB_ENV
+          echo "ARTIFACT_PATTERN=overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-amd64.tar.xz" >> $GITHUB_ENV
         else
           echo "Exporting image.."
-          docker image save -o overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
+          docker image save -o overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-aarch64.tar overte-org/overte-server:"$GIT_COMMIT"_"$BUILD_NUMBER"
           echo "Compressing with xz.."
-          xz -z -T0 overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar
+          xz -z -T0 overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-aarch64.tar
           echo "Done."
-          echo "ARTIFACT_PATTERN=overte-server-PR${{ github.event.number }}-${{ steps.buildenv1.outputs.github_sha_short }}-aarch64.tar.xz" >> $GITHUB_ENV
+          echo "ARTIFACT_PATTERN=overte-server-PR${{ github.event.number }}-${{ steps.env1.outputs.github_sha_short }}-aarch64.tar.xz" >> $GITHUB_ENV
         fi
 
     - name: Output system stats
