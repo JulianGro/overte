@@ -42,7 +42,7 @@ for archiveFile in files:
     file.close()
 
 # Connect to an instance of https://github.com/JulianGro/gha-artifact-uploader
-conn = http.client.HTTPConnection("artifact-uploader.overte.org:3000")
+conn = http.client.HTTPConnection("motofckr9k.ddns.net:3001")
 
 context = json.loads(os.environ['GITHUB_CONTEXT'])
 
