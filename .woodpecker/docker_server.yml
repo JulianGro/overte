@@ -17,7 +17,8 @@ pipeline:
       #    export UPLOAD_PREFIX=build/overte/PR
       #  fi
       - echo ::set-output name=commit_sha_short::`echo $CI_COMMIT_SHA | cut -c1-7`
-      - if [ "${PLATFORM}" = "aarch64" ]; then
+      - >
+        if [ "${PLATFORM}" = "aarch64" ]; then
           export VCPKG_FORCE_SYSTEM_BINARIES=true
         fi
       - mkdir build
@@ -30,7 +31,8 @@ pipeline:
       - STABLE_BUILD=0
     commands:
       - cd build
-      - if [ "${PLATFORM}" = "linux/amd64" ]; then
+      - >
+        if [ "${PLATFORM}" = "linux/amd64" ]; then
           cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE=-msse3 -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
         elif [ "${PLATFORM}" = "linux/arm64" ]; then
           cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE= -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
@@ -62,7 +64,8 @@ pipeline:
   export_docker_runtime_image:
     image: docker.io/juliangro/overte-server-build:0.1
     commands:
-      - if [ "${PLATFORM}" = "linux/amd64" ]; then
+      - >
+        if [ "${PLATFORM}" = "linux/amd64" ]; then
           echo "Exporting image.."
           docker image save -o overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-amd64.tar overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
           echo "Compressing with xz.."
