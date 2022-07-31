@@ -1,0 +1,99 @@
+
+matrix:
+  platform:
+    - 'linux/amd64'
+    - 'linux/arm64'
+
+platform: ${platform}
+
+
+pipeline:
+  setup_environment:
+    image: docker.io/juliangro/overte-server-build:0.1
+
+
+    commands:
+      - if [ "CI_BUILD_EVENT" = "pull_request" ]; then
+          export UPLOAD_PREFIX=build/overte/PR
+        fi
+      - echo ::set-output name=commit_sha_short::`echo $CI_COMMIT_SHA | cut -c1-7`
+      - if [ "${PLATFORM}" = "aarch64" ]; then
+          echo "VCPKG_FORCE_SYSTEM_BINARIES=true" >> $GITHUB_ENV
+        fi
+      - mkdir build
+
+
+  configure_build:
+    image: docker.io/juliangro/overte-server-build:0.1
+    environment:
+      - VIRCADIA_USE_SYSTEM_QT=true
+      - STABLE_BUILD=0
+    commands:
+      - cd build
+      - if [ "${PLATFORM}" = "linux/amd64" ]; then
+          cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE=-msse3 -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
+        elif [ "${PLATFORM}" = "linux/arm64" ]; then
+          cmake .. -DSERVER_ONLY=1 -DBUILD_TOOLS=0 -DVIRCADIA_CPU_ARCHITECTURE= -DCMAKE_BUILD_TYPE=Release -DVCPKG_BUILD_TYPE=release
+        else
+          return 1
+        fi
+
+
+  build_domain_server:
+    image: docker.io/juliangro/overte-server-build:0.1
+    commands:
+      - cd build
+      - make -j$(nproc) domain-server
+
+
+  build_assignment_client:
+    image: docker.io/juliangro/overte-server-build:0.1
+    commands:
+      - make -j$(nproc) assignment-client
+
+
+  create_docker_runtime_image:
+    image: docker.io/juliangro/overte-server-build:0.1
+    commands:
+      - cd ..
+      - docker build -t overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER} -f tools/ci-scripts/docker_package/Dockerfile_runtime .
+
+
+  export_docker_runtime_image:
+    image: docker.io/juliangro/overte-server-build:0.1
+    commands:
+      - if [ "${PLATFORM}" = "linux/amd64" ]; then
+          echo "Exporting image.."
+          docker image save -o overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-amd64.tar overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
+          echo "Compressing with xz.."
+          xz -z -T0 overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-amd64.tar
+          echo "Done."
+          export "ARTIFACT_PATTERN=overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-amd64.tar.xz"
+        elif [ "${PLATFORM}" = "linux/arm64" ]; then
+          echo "Exporting image.."
+          docker image save -o overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-aarch64.tar overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
+          echo "Compressing with xz.."
+          xz -z -T0 overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-aarch64.tar
+          echo "Done."
+          export "ARTIFACT_PATTERN=overte-server-PR${CI_COMMIT_PULL_REQUEST}-${CI_COMMIT_SHA:0:7}-aarch64.tar.xz"
+        else
+          return 0
+        fi
+
+  upload_docker_runtime_image:
+    image: woodpeckerci/plugin-s3
+    settings:
+      endpoint: https://fra1.digitaloceanspaces.com
+      bucket: overte-public
+      acl: public-read
+      access_key:
+        from_secret: do_s3_access_key
+      secret_key:
+        from_secret: do_s3_secret_key
+      source: $ARTIFACT_PATTERN
+      target: $UPLOAD_PREFIX/$ARTIFACT_PATTERN
+
+
+
+
+
