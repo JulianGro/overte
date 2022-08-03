@@ -15,7 +15,6 @@ pipeline:
     commands:
       # Deliberately fail immediately
       - return 1
-
       #- if [ "CI_BUILD_EVENT" = "pull_request" ]; then
       #    export UPLOAD_PREFIX=build/overte/PR
       #  fi
