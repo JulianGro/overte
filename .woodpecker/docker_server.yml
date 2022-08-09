@@ -59,6 +59,7 @@ pipeline:
         tag: ${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
 
 
+
   export_docker_runtime_image:
     image: docker.io/juliangro/overte-server-build:0.1
     commands:
