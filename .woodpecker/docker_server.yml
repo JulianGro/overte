@@ -57,8 +57,6 @@ pipeline:
         dockerfile: tools/ci-scripts/docker_package/Dockerfile_runtime
         platforms: ${platform}
         tag: ${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
-    #commands:
-    #  - docker build -t overte-org/overte-server: -f tools/ci-scripts/docker_package/Dockerfile_runtime .
 
 
   export_docker_runtime_image:
