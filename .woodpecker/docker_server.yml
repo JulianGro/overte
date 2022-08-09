@@ -50,9 +50,15 @@ pipeline:
 
 
   create_docker_runtime_image:
-    image: docker.io/juliangro/overte-server-build:0.1
-    commands:
-      - docker build -t overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER} -f tools/ci-scripts/docker_package/Dockerfile_runtime .
+    image: woodpeckerci/plugin-docker-buildx
+      settings:
+        dry_run: true
+        repo: overte-org/overte-server
+        dockerfile: tools/ci-scripts/docker_package/Dockerfile_runtime
+        platforms: ${platform}
+        tag: ${CI_COMMIT_SHA}_${CI_BUILD_NUMBER}
+    #commands:
+    #  - docker build -t overte-org/overte-server: -f tools/ci-scripts/docker_package/Dockerfile_runtime .
 
 
   export_docker_runtime_image:
