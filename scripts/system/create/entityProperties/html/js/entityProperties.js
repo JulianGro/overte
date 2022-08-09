@@ -3,6 +3,7 @@
 //  Created by Ryan Huffman on 13 Nov 2014
 //  Copyright 2014 High Fidelity, Inc.
 //  Copyright 2020 Vircadia contributors.
+//  Copyright 2022 Overte e.V.
 //
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
@@ -877,9 +878,10 @@ const GROUPS = [
             {
                 label: "Material Data",
                 type: "textarea",
-                buttons: [ { id: "clear", label: "Clear Material Data", className: "red", onClick: clearMaterialData }, 
-                           { id: "edit", label: "Edit as JSON", className: "blue", onClick: newJSONMaterialEditor },
-                           { id: "save", label: "Save Material Data", className: "black", onClick: saveMaterialData } ],
+                buttons: [ { id: "materialAssistant", label: "Assistant...", className: "secondary_blue blue", onClick: openMaterialAssistant },
+                           { id: "clear", label: "Clear Material", className: "secondary_red red", onClick: clearMaterialData }, 
+                           { id: "edit", label: "Edit as JSON", className: "secondary", onClick: newJSONMaterialEditor },
+                           { id: "save", label: "Save Material", className: "secondary", onClick: saveMaterialData }],
                 propertyID: "materialData",
             },
             {
@@ -1327,6 +1329,57 @@ const GROUPS = [
         ]
     },
     {
+        id: "polyvox",
+        label: "POLYVOX",
+        properties: [
+            {
+                label: "Volume Size",
+                type: "vec3",
+                vec3Type: "xyz",
+                step: 1.0,
+                decimals: 0,
+                subLabels: [ "x", "y", "z" ],
+                unit: "",
+                propertyID: "voxelVolumeSize",
+            },
+            {
+                label: "Texture preset",
+                type: "dropdown",
+                options: { 0 : "None", 1 : "Grass + ground", 2 : "Bricks", 3 : "Stone", 
+                           4: "Concrete", 5 : "Rock"},
+                propertyID: "polyVoxPreset",
+                onDropdownChange: createPolyVoxPresetChangedFunction,
+                skipPropertyUpdate: true,
+            },
+            {
+                label: "Surface Style",
+                type: "dropdown",
+                options: { 0: "Marching cubes", 1: "Cubic", 
+                           2: "Edged cubic", 3: "Edged marching cubes" },
+                propertyID: "voxelSurfaceStyle",
+                propertyName: "voxelSurfaceStyle",
+            },
+            {
+                label: "X Texture URL",
+                type: "string",
+                propertyID: "xTextureURL",
+                propertyName: "xTextureURL",
+            },
+            {
+                label: "Y Texture URL",
+                type: "string",
+                propertyID: "yTextureURL",
+                propertyName: "yTextureURL",
+            },
+            {
+                label: "Z Texture URL",
+                type: "string",
+                propertyID: "zTextureURL",
+                propertyName: "zTextureURL",
+            },
+        ]
+    },
+    {
         id: "spatial",
         label: "SPATIAL",
         properties: [
@@ -1705,7 +1758,7 @@ const GROUPS_PER_TYPE = {
   ParticleEffect: [ 'base', 'particles', 'particles_emit', 'particles_size', 'particles_color', 
                     'particles_behavior', 'particles_constraints', 'spatial', 'behavior', 'scripts', 'physics' ],
   PolyLine: [ 'base', 'spatial', 'behavior', 'scripts', 'collision', 'physics' ],
-  PolyVox: [ 'base', 'spatial', 'behavior', 'scripts', 'collision', 'physics' ],
+  PolyVox: [ 'base', 'polyvox', 'spatial', 'behavior', 'scripts', 'collision', 'physics' ],
   Grid: [ 'base', 'grid', 'spatial', 'behavior', 'scripts', 'physics' ],
   Multiple: [ 'base', 'spatial', 'behavior', 'scripts', 'collision', 'physics' ],
 };
@@ -3197,6 +3250,55 @@ function parentIDChanged() {
     }
 }
 
+function createPolyVoxPresetChangedFunction(property) {
+    return function() {
+        property.elInput.classList.remove('multi-diff');
+        var xTextureURL = "";
+        var yTextureURL = "";
+        var zTextureURL = "";
+        switch (parseInt(this.value)) {
+            // Clear texture entries
+            case 0:
+                xTextureURL = "";
+                yTextureURL = "";
+                zTextureURL = "";
+                break;
+            // Grass + ground
+            case 1:
+                xTextureURL = "qrc:///serverless/Textures/ground_5-2K/2K-ground_5-diffuse.jpg";
+                yTextureURL = "qrc:///serverless/Textures/ground_grass_gen_05.png";
+                zTextureURL = "qrc:///serverless/Textures/ground_5-2K/2K-ground_5-diffuse.jpg";
+                break;
+            // Bricks
+            case 2:
+                xTextureURL = "qrc:///serverless/Textures/2K-wall_stone_2-diffuse_l.jpg";
+                yTextureURL = "qrc:///serverless/Textures/2K-stone_floor_3-diffuse_l.jpg";
+                zTextureURL = "qrc:///serverless/Textures/2K-wall_stone_2-diffuse_l.jpg";
+                break;
+            // Stone
+            case 3:
+                xTextureURL = "qrc:///serverless/Textures/wall_l.png";
+                yTextureURL = "qrc:///serverless/Textures/floor_l.png";
+                zTextureURL = "qrc:///serverless/Textures/wall_l.png";
+                break;
+            // Concrete
+            case 4:
+                xTextureURL = "qrc:///serverless/Textures/concrete_12-2K/2K-concrete_12-diffuse.jpg";
+                yTextureURL = "qrc:///serverless/Textures/concrete_12-2K/2K-concrete_12-diffuse.jpg";
+                zTextureURL = "qrc:///serverless/Textures/concrete_12-2K/2K-concrete_12-diffuse.jpg";
+                break;
+            // Rock
+            case 5:
+                xTextureURL = "qrc:///serverless/Textures/Rock026_2K-JPG/Rock026_2K_Color.jpg";
+                yTextureURL = "qrc:///serverless/Textures/Rock026_2K-JPG/Rock026_2K_Color.jpg";
+                zTextureURL = "qrc:///serverless/Textures/Rock026_2K-JPG/Rock026_2K_Color.jpg";
+                break;
+        }
+        updateProperty("xTextureURL", xTextureURL, false);
+        updateProperty("yTextureURL", yTextureURL, false);
+        updateProperty("zTextureURL", zTextureURL, false);
+    };
+}
 
 /**
  * BUTTON CALLBACKS
@@ -3478,6 +3580,21 @@ function saveMaterialData() {
     saveJSONMaterialData(true);
 }
 
+function openMaterialAssistant() {
+    if (materialEditor === null) {
+        loadDataInMaUi({});
+    } else {
+        loadDataInMaUi(materialEditor.getText());
+    }
+    $('#uiMaterialAssistant').show();
+    $('#properties-list').hide();
+}
+
+function closeMaterialAssistant() {
+    $('#uiMaterialAssistant').hide();
+    $('#properties-list').show();
+}
+
 /**
  * @param {boolean} noUpdate - don't update the UI, but do send a property update.
  * @param {Set.<string>} [entityIDsToUpdate] - Entity IDs to update materialData for.
@@ -3509,6 +3626,8 @@ function setMaterialDataFromEditor(noUpdate, entityIDsToUpdate) {
     } else {
         updateProperty('materialData', text, false);
     }
+    
+    maGetMaterialDataAssistantAvailability(text);
 }
 
 let materialEditor = null;
@@ -3565,6 +3684,14 @@ function hideMaterialDataTextArea() {
 
 function hideMaterialDataSaved() {
     $('#property-materialData-saved').hide();
+}
+
+function showMaterialAssistantButton() {
+    $('#property-materialData-button-materialAssistant').show();
+}
+
+function hideMaterialAssistantButton() {
+    $('#property-materialData-button-materialAssistant').hide();
 }
 
 function setMaterialEditorJSON(json) {
@@ -4043,6 +4170,7 @@ function handleEntitySelectionUpdate(selections, isPropertiesToolUpdate) {
     const multipleSelections = currentSelections.length > 1;
     const hasSelectedEntityChanged = !areSetsEqual(selectedEntityIDs, previouslySelectedEntityIDs);
 
+    closeMaterialAssistant();
     requestZoneList();
     
     if (selections.length === 0) {
@@ -4344,20 +4472,20 @@ function handleEntitySelectionUpdate(selections, isPropertiesToolUpdate) {
 
         let materialDataMultiValue = getMultiplePropertyValue("materialData");
         let materialDataTextArea = getPropertyInputElement("materialData");
-        let materialJson = null;
+        let materialJSON = null;
         if (!materialDataMultiValue.isMultiDiffValue) {
             try {
-                materialJson = JSON.parse(materialDataMultiValue.value);
+                materialJSON = JSON.parse(materialDataMultiValue.value);
             } catch (e) {
 
             }
         }
-        if (materialJson !== null && !lockedMultiValue.isMultiDiffValue && !lockedMultiValue.value) {
+        if (materialJSON !== null && !lockedMultiValue.isMultiDiffValue && !lockedMultiValue.value) {
             if (materialEditor === null) {
                 createJSONMaterialEditor();
             }
             materialDataTextArea.classList.remove('multi-diff');
-            setMaterialEditorJSON(materialJson);
+            setMaterialEditorJSON(materialJSON);
             showSaveMaterialDataButton();
             hideMaterialDataTextArea();
             hideNewJSONMaterialEditorButton();
@@ -4372,6 +4500,8 @@ function handleEntitySelectionUpdate(selections, isPropertiesToolUpdate) {
             hideSaveMaterialDataButton();
             hideMaterialDataSaved();
         }
+
+        maGetMaterialDataAssistantAvailability(materialJSON);
 
         if (hasSelectedEntityChanged && selections.length === 1 && entityTypes[0] === "Material") {
             requestMaterialTarget();
@@ -4756,7 +4886,16 @@ function loaded() {
             let propertyID = elDropdown.getAttribute("propertyID");
             let property = properties[propertyID];
             property.elInput = dt;
-            dt.addEventListener('change', createEmitTextPropertyUpdateFunction(property));
+            
+            if (property.data.
+                skipPropertyUpdate !== true) {
+                    dt.addEventListener('change', createEmitTextPropertyUpdateFunction(property));
+            }
+            
+            if (property.data.
+                onDropdownChange !== undefined) {
+                dt.addEventListener('change', property.data.onDropdownChange(property));
+            }
         }
 
         document.addEventListener('click', function(ev) { closeAllDropdowns() }, true);

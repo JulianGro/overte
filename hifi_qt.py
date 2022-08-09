@@ -134,7 +134,7 @@ endif()
             return
 
         if 'Windows' == system:
-            self.qtUrl = self.assets_url + '/dependencies/vcpkg/qt5-install-5.15.2-windows.tar.gz'
+            self.qtUrl = self.assets_url + '/dependencies/qt5/qt5-install-5.15.5-qtwebengine-5.15.11-2022.08.01-kde_9480de754ec97f4b63c2b5176672903f80e3f22ff59d3acf0ddd8c68f58c1ed8-windows-x86_64.tar.xz'
         elif 'Darwin' == system:
             self.qtUrl = self.assets_url + '/dependencies/vcpkg/qt5-install-5.15.2-macos.tar.gz'
         elif 'Linux' == system:
@@ -146,7 +146,7 @@ endif()
                 u_minor = int( distro.minor_version() )
                 if distro.id() == 'ubuntu' or distro.id() == 'linuxmint':
                     if (distro.id() == 'ubuntu' and u_major == 18) or distro.id() == 'linuxmint' and u_major == 19:
-                        self.qtUrl = self.assets_url + '/dependencies/vcpkg/qt5-install-5.15.2-ubuntu-18.04-amd64.tar.xz'
+                        self.qtUrl = self.assets_url + '/dependencies/qt5/qt5-install-5.15.5-2022.07.17-kde_ea4efc067b47c11b1aac61668afd8578a6834f5b-ubuntu-18.04-amd64.tar.xz'
                     elif (distro.id() == 'ubuntu' and u_major > 18) or (distro.id() == 'linuxmint' and u_major > 19):
                         self.__no_qt_package_error()
                     else:
@@ -205,7 +205,7 @@ endif()
 
     def installQt(self):
         if not os.path.isdir(self.fullPath):
-            print ('Downloading Qt from AWS')
+            print ('Downloading Qt package')
             print('Extracting ' + self.qtUrl + ' to ' + self.path)
             hifi_utils.downloadAndExtract(self.qtUrl, self.path)
         else:

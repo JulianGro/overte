@@ -31,24 +31,105 @@ enum LogMsgType {
     LogSuppressed = 100
 };
 
-/// Handles custom message handling and sending of stats/logs to Logstash instance
+///
+
+/**
+ * @brief Handles custom message handling and sending of stats/logs to Logstash instance
+ *
+ */
 class LogHandler : public QObject {
     Q_OBJECT
 public:
+    /**
+     * @brief Returns the one instance of the LogHandler object
+     *
+     * @return LogHandler&
+     */
     static LogHandler& getInstance();
 
-    /// sets the target name to output via the verboseMessageHandler, called once before logging begins
-    /// \param targetName the desired target name to output in logs
+    /**
+     * @brief Parse logging options
+     *
+     * This parses the logging settings in the environment variable, or from the commandline
+     *
+     * @param options Option list
+     * @param paramName Name of the log option, for error reporting.
+     * @return true Option list was parsed successfully
+     * @return false There was an error
+     */
+    bool parseOptions(const QString& options, const QString &paramName);
+
+    /**
+     * @brief Set the name of the component that's producing log output
+     *
+     * For instance, "assignment-client", "audio-mixer", etc.
+     * Called once before logging begins
+     *
+     * @param targetName the desired target name to output in logs
+     */
     void setTargetName(const QString& targetName);
 
+    /**
+     * @brief Set whether to output the process ID
+     *
+     * @note This has no effect when logging with journald, the PID is always logged
+     *
+     * @param shouldOutputProcessID Whether to output the PID
+     */
     void setShouldOutputProcessID(bool shouldOutputProcessID);
+
+    /**
+     * @brief Set whether to output the thread ID
+     *
+     * @param shouldOutputThreadID
+     */
     void setShouldOutputThreadID(bool shouldOutputThreadID);
+
+    /**
+     * @brief Set whether to display timestamps with milliseconds
+     *
+     * @param shouldDisplayMilliseconds
+     */
     void setShouldDisplayMilliseconds(bool shouldDisplayMilliseconds);
 
+    /**
+     * @brief Set whether to use Journald, if it's available
+     *
+     * @param shouldUseJournald Whether to use journald
+     */
+    void setShouldUseJournald(bool shouldUseJournald);
+
+    /**
+     * @brief Whether Journald is available on this version/system.
+     *
+     * Support is available depending on compile options and only on Linux.
+     *
+     * @return true Journald is available
+     * @return false Journald is not available
+     */
+    bool isJournaldAvailable() const;
+
+    /**
+     * @brief Process a log message
+     *
+     * This writes it to a file, logs it to the console, or sends it to journald.
+     *
+     * @param type  Log message type
+     * @param context Context of the log message (source file, line, function)
+     * @param message Log message
+     * @return QString The log message's text with added severity and timestamp
+     */
     QString printMessage(LogMsgType type, const QMessageLogContext& context, const QString &message);
 
-    /// a qtMessageHandler that can be hooked up to a target that links to Qt
-    /// prints various process, message type, and time information
+    /**
+     * @brief A qtMessageHandler that can be hooked up to a target that links to Qt
+     *
+     * Prints various process, message type, and time information
+     *
+     * @param type  Log message type
+     * @param context Context of the log message (source file, line, function)
+     * @param message Log message
+     */
     static void verboseMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &message);
 
     int newRepeatedMessageID();
@@ -56,6 +137,27 @@ public:
 
     void setupRepeatedMessageFlusher();
 
+    /**
+     * @brief Break when a message that contains the specified string is logged
+     *
+     * This is a function intended to be invoked from inside a debugger. It should be of help when it's hard to put a breakpoint
+     * on the generating line because it comes from inlined code, or the interesting text is generated at runtime.
+     *
+     * Example usage:
+     *
+     * @code {.cpp}
+     * LogHandler::breakOnMessage("No instance available for");
+     * @endcode
+     *
+     * Then the debugger should be triggered as soon as a message containing that string is logged. Backtracking
+     * through the call stack should lead back to the source.
+     *
+     * @note Support for creating a breakpoint in software is compiler and OS specific. If there's no support for
+     * creating a breakpoint on the current compiler/OS, then an abort will be triggered instead.
+     *
+     * @param str Text to match
+     */
+    static void breakOnMessage(const char *str);
 private:
     LogHandler();
     ~LogHandler() = default;
@@ -68,6 +170,7 @@ private:
     bool _shouldDisplayMilliseconds { false };
     bool _useColor { false };
     bool _keepRepeats { false };
+    bool _useJournald { false };
 
     QString _previousMessage;
     int _repeatCount { 0 };
@@ -79,6 +182,8 @@ private:
         QString repeatString;
     };
     std::vector<RepeatedMessageRecord> _repeatedMessageRecords;
+
+    QStringList _breakMessages;
     static QRecursiveMutex _mutex;
 };
 
