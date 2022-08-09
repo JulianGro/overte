@@ -10,16 +10,7 @@ platform: ${platform}
 pipeline:
   setup_environment:
     image: docker.io/juliangro/overte-server-build:0.1
-
-
     commands:
-      # Deliberately fail immediately
-      - return 1
-
-      #- if [ "CI_BUILD_EVENT" = "pull_request" ]; then
-      #    export UPLOAD_PREFIX=build/overte/PR
-      #  fi
-      - echo ::set-output name=commit_sha_short::`echo $CI_COMMIT_SHA | cut -c1-7`
       - >
         if [ "${platform}" = "aarch64" ]; then
           export VCPKG_FORCE_SYSTEM_BINARIES=true
@@ -54,13 +45,13 @@ pipeline:
   build_assignment_client:
     image: docker.io/juliangro/overte-server-build:0.1
     commands:
+      - cd build
       - make -j$(nproc) assignment-client
 
 
   create_docker_runtime_image:
     image: docker.io/juliangro/overte-server-build:0.1
     commands:
-      - cd ..
       - docker build -t overte-org/overte-server:${CI_COMMIT_SHA}_${CI_BUILD_NUMBER} -f tools/ci-scripts/docker_package/Dockerfile_runtime .
 
 
@@ -85,6 +76,7 @@ pipeline:
         else
           return 0
         fi
+
 
   upload_docker_runtime_image:
     image: woodpeckerci/plugin-s3
