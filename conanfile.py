@@ -58,7 +58,7 @@ class Overte(ConanFile):
         self.requires("gifcreator/2016.11@overte/stable")
         self.requires("glad/0.1.36")
         self.requires("gli/cci.20210515")
-        self.requires("glslang/1.3.268.0#0c1322044597c616131708e9c06bc7df")
+        self.requires("glslang/1.3.268.0")
         self.requires("liblo/0.30@overte/stable")
         self.requires("libnode/18.20.8@overte/stable")
         self.requires("nlohmann_json/3.11.2")
