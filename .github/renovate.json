@@ -5,5 +5,13 @@
     ],
     "conan": {
         "enabled": true
+    },
+    "artifactory": {
+        "enabled": true,
+        "customRegistrySupport": true,
+        "registryUrls": [
+            "https://repo1.maven.org/maven2",
+            "https://europe-maven.pkg.dev/org-artifacts/maven-virtual"
+        ]
     }
 }
