@@ -56,7 +56,8 @@ jobs:
       run: docker push overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}
 
   # This Job runs after the matrix is finished.
-  name: Create and push manifests
+  manifest:
+    name: Create and push manifests
     needs: [build]  # Depend on the build job finishing first.
     runs-on: ubuntu-latest
     steps:
