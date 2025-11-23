@@ -23,10 +23,10 @@ jobs:
             # We use a third-party runner hosted by depot.dev to avoid timing out in case Qt has to be built from source.
             runner: ubuntu-latest  # Which GitHub Actions Runner to use.
             arch: amd64  # Used for naming Docker images.
-          - os: Ubuntu aarch64
-            # We use a third-party runner hosted by depot.dev to avoid timing out in case Qt has to be built from source.
-            runner: ubuntu-24.04-arm  # Which GitHub Actions Runner to use.
-            arch: aarch64  # Used for naming Docker images.
+          #~ - os: Ubuntu aarch64
+            #~ # We use a third-party runner hosted by depot.dev to avoid timing out in case Qt has to be built from source.
+            #~ runner: ubuntu-24.04-arm  # Which GitHub Actions Runner to use.
+            #~ arch: aarch64  # Used for naming Docker images.
       fail-fast: false
     runs-on: ${{matrix.runner}}
     steps:
