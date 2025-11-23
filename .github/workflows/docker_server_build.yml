@@ -51,23 +51,25 @@ jobs:
       shell: bash
       run: docker build --no-cache -t overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }} -f ./Dockerfile.runtime .
 
-    - name: Push images
+    - name: Push image
       shell: bash
-      run: docker build --no-cache -t overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }} -f ./Dockerfile.runtime .
+      run: docker push overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}
 
+  # This Job runs after the matrix is finished.
+  name: Create and push manifests
+    needs: [build]  # Depend on the build job finishing first.
+    runs-on: ubuntu-latest
+    steps:
     - name: Create and push manifests
       shell: bash
       run: |
-        docker push overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}
-        docker push overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}
-        docker manifest create overte/overte-server:${{ github.ref_name }} overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }} overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}
+        docker manifest create overte/overte-server:${{ github.ref_name }} overte/overte-server:${{ github.ref_name }}-amd64 overte/overte-server:${{ github.ref_name }}-aarch64
         docker manifest push overte/overte-server:${{ github.ref_name }}
 
-    # Show reminder to update the latest tag.
-    # We don't update it automatically, since this could be an experimental build.
+    # We don't update the latest tag automatically, since this could be an experimental build.
     - name: Don't forget to update the latest tag!
       shell: bash
       run: |
         echo "docker manifest rm overte/overte-server:latest"
-        echo "docker manifest create overte/overte-server:latest overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }} overte/overte-server:${{ github.ref_name }}-${{ matrix.arch }}"
+        echo "docker manifest create overte/overte-server:latest overte/overte-server:${{ github.ref_name }}-amd64 overte/overte-server:${{ github.ref_name }}-aarch64"
         echo "docker manifest push overte/overte-server:latest"
