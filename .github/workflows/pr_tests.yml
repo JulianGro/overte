@@ -1,0 +1,169 @@
+name: Pull Request Tests
+# Keep in mind that GitHub Actions does not allow reading secrets during PR builds.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  # OSX specific variables
+  DEVELOPER_DIR: /Applications/Xcode_11.2.app/Contents/Developer
+  # We are using macOS SDK 10.12 to work around a lot of OpenGL issues in newer SDKs.
+  # There are crashes on startup, crashes on window resize, etc. on newer macOS SDKs.
+  MACOSX_DEPLOYMENT_TARGET: '10.12'
+
+  # WIN32 specific variables
+  PreferredToolArchitecture: X64
+
+  # Ensure XZ always runs with muticore support
+  XZ_OPT: -T0
+
+jobs:
+  test_pr:
+    name: "${{matrix.os}}"
+    strategy:
+        matrix:
+          include:
+            - os: windows-2019
+            - os: windows-2022
+            - os: macOS-10.15
+            - os: macOS-11
+            - os: macOS-12
+            - os: ubuntu-18.04
+              apt-dependencies: mesa-common-dev libegl1 libglvnd-dev libdouble-conversion1 libpulse0 libsnappy1v5 libwebpdemux2 libwebpmux3 python3-distro
+            - os: ubuntu-22.04
+              apt-dependencies: qtbase5-dev qtbase5-private-dev qtwebengine5-dev qtwebengine5-dev-tools qtmultimedia5-dev libqt5opengl5-dev qtscript5-dev libqt5scripttools5 libqt5webchannel5-dev libqt5websockets5-dev qtxmlpatterns5-dev-tools qttools5-dev libqt5xmlpatterns5-dev libqt5svg5-dev qml-module-qtwebchannel build-essential cmake curl freeglut3-dev git libasound2 libasound2-dev libdouble-conversion-dev libdrm-dev libfontconfig1 libgl1-mesa-dev libglvnd-dev libharfbuzz-dev libjack-dev libjack0 libnspr4 libnss3 libpcre2-16-0 libpulse0 libsdl2-dev libssl-dev libudev-dev libxcb-xinerama0-dev libxcb-xinput0 libxcomposite1 libxcursor1 libxi-dev libxmu-dev libxrandr-dev libxslt1.1 libxtst6 make mesa-common-dev mesa-utils nodejs npm patchelf python2 python3 python3-distro xdg-user-dirs zlib1g-dev ninja-build zip python3-distro
+            # Do not change the names of self-hosted runners without knowing what you are doing, as they correspond to labels that have to be set on the runner.
+            - os: self-hosted_debian-11_aarch64
+              apt-dependencies: qtbase5-dev qtbase5-private-dev qtwebengine5-dev qtwebengine5-dev-tools qtmultimedia5-dev libqt5opengl5-dev qtscript5-dev libqt5scripttools5 libqt5webchannel5-dev libqt5websockets5-dev qtxmlpatterns5-dev-tools qttools5-dev libqt5xmlpatterns5-dev libqt5svg5-dev qml-module-qtwebchannel build-essential cmake curl freeglut3-dev git libasound2 libasound2-dev libdouble-conversion-dev libdrm-dev libfontconfig1 libgl1-mesa-dev libglvnd-dev libharfbuzz-dev libjack-dev libjack0 libnspr4 libnss3 libpcre2-16-0 libpulse0 libsdl2-dev libssl-dev libudev-dev libxcb-xinerama0-dev libxcb-xinput0 libxcomposite1 libxcursor1 libxi-dev libxmu-dev libxrandr-dev libxslt1.1 libxtst6 make mesa-common-dev mesa-utils nodejs npm patchelf python2 python3 python3-distro xdg-user-dirs zlib1g-dev ninja-build zip python3-distro
+        fail-fast: false
+    runs-on: ${{matrix.os}}
+    steps:
+    - name: Configure Build Environment
+      shell: bash
+      id: buildenv1
+      run: |
+        # Don't optimize builds to save build time.
+        echo "VIRCADIA_OPTIMIZE=false" >> $GITHUB_ENV
+        # Linux build variables
+        if [[ "${{ matrix.os }}" = "ubuntu-"* || "${{ matrix.os }}" = *"debian"* ]]; then
+          echo "CMAKE_BUILD_EXTRA=-- -j$(nproc)" >> $GITHUB_ENV
+          # Variables specific to our aarch64 runner
+          if [ "${{ matrix.os }}" = "self-hosted_debian-11_aarch64" ]; then
+            echo "VIRCADIA_USE_SYSTEM_QT=true" >> $GITHUB_ENV
+            echo "CI_WORKSPACE=${{runner.workspace}}" >> $GITHUB_ENV
+          fi
+          # Variables specific to aarch64
+          if [[ "${{ matrix.os }}" = *"aarch64" ]]; then
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=true" >> $GITHUB_ENV
+          fi
+        fi
+        # Mac build variables
+        if [ "${{ matrix.os }}" = "macOS-"* ]; then
+          echo "CMAKE_EXTRA=-DCMAKE_OSX_SYSROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.12.sdk -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=OFF -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl -DOPENSSL_LIBRARIES=/usr/local/opt/openssl/lib -G Xcode" >> $GITHUB_ENV
+        fi
+        # Windows build variables
+        if [ "${{ matrix.os }}" = "windows-"* ]; then
+          echo "CMAKE_EXTRA=-A x64" >> $GITHUB_ENV
+        fi
+
+    - name: Clear Working Directory
+      if: startsWith(matrix.os, 'windows') || contains(matrix.os, 'self-hosted')
+      shell: bash
+      working-directory: ${{runner.workspace}}
+      run: rm -rf ./*
+
+    - uses: actions/checkout@v1
+      with:
+        submodules: false
+        fetch-depth: 1
+
+    - name: Install dependencies
+      shell: bash
+      if: startsWith(matrix.os, 'ubuntu') || contains(matrix.os, 'debian') || startsWith(matrix.os, 'macOS')
+      run: |
+        if [[ "${{ matrix.os }}" =~ "ubuntu" || "${{ matrix.os }}" =~ "debian" ]]; then
+
+          echo "Updating apt repository index"
+          sudo apt-get update || exit 1
+
+          if [[ "${{ matrix.os }}" =~ "ubuntu-22.04" ]]; then
+            echo "Upgrade existing packages"
+            sudo apt-get dist-upgrade -y || exit 1
+          fi
+
+          echo "Installing apt packages"
+          sudo apt-get install -y ${{ matrix.apt-dependencies }} || exit 1
+
+        else # macOS
+          echo "Downloading MacOSX10.12 SDK.."
+          curl --progress-bar -L -o macOS_SDK10.12.4.tar.xz "https://data.moto9000.moe/overte_packages/macOS_SDK10.12.4.tar.xz" || exit 1
+          echo "  done\n"
+          echo "Checking MacOSX10.12 SDK.."
+          echo "c00e03cb64bed8d0d75d7a01c93de094b6ffaa3bc3318e7b29a9bdc354f0e29e363c454b7db89db8a3b78e9702668d1c661f1af279807de8db11accecb0ca498  macOS_SDK10.12.4.tar.xz" >> macOS_SDK10.12.4.tar.xz.checksum
+          shasum -a 512 -w -c macOS_SDK10.12.4.tar.xz.checksum
+          echo "Extracting MacOSX10.12 SDK.."
+          tar -xf macOS_SDK10.12.4.tar.xz || exit 1
+          echo "  done\n"
+          echo "Installing MacOSX10.12 SDK.."
+          # cp always sets an error code while copying the SDK so we return 0 when that happens.
+          sudo cp -rp MacOSX10.12.sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/ || exit 0
+          echo "  done"
+        fi
+
+    - name: Create Build Environment
+      shell: bash
+      run: cmake -E make_directory build
+
+    - name: Configure CMake
+      working-directory: build
+      shell: bash
+      run: cmake .. -DVCPKG_BUILD_TYPE=release -DBUILD_TESTS=ON -DBUILD_SERVER=OFF -DBUILD_CLIENT=OFF -DBUILD_TOOLS=OFF -DBUILD_INSTALLER=OFF -DVCPKG_BUILD_TYPE=release $CMAKE_EXTRA
+
+    - name: Compress cmake logs
+      if: always()
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" == "macOS-10.15" ]; then
+          TAR=gtar
+        else
+          TAR=tar
+        fi
+        if [ ${{ env.CI_WORKSPACE }} ]; then
+          find "$CI_WORKSPACE/vircadia-files/vcpkg" -name '*log' -type f -print0 | $TAR --null --force-local -T - -c --xz -v -f "${{ runner.workspace }}/cmake-logs-${{ matrix.os }}-${{ github.event.number }}.tar.xz"
+        else
+          find "$HOME/vircadia-files/vcpkg" -name '*log' -type f -print0 | $TAR --null --force-local -T - -c --xz -v -f "${{ runner.workspace }}/cmake-logs-${{ matrix.os }}-${{ github.event.number }}.tar.xz"
+        fi
+
+    - name: Archive cmake logs
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cmake-logs-${{ matrix.os }}-${{ github.event.number }}.tar.xz
+        path: ${{ runner.workspace }}/cmake-logs-${{ matrix.os }}-${{ github.event.number }}.tar.xz
+        if-no-files-found: error
+
+    - name: Build Tests
+      working-directory: build
+      shell: bash
+      run: cmake --build . --target all-tests $CMAKE_BUILD_EXTRA
+
+    - name: Run Tests
+      working-directory: build
+      shell: bash
+      run: cmake --build . --target test $CMAKE_BUILD_EXTRA
+
+    - name: Output system stats
+      if: ${{ always() }}
+      working-directory: build
+      shell: bash
+      run: |
+        echo "Disk usage:"
+        df -h
+
+    # Frees up memory on the self-hosted runner
+    - name: Clear Working Directory
+      if: contains(matrix.os, 'self-hosted')
+      shell: bash
+      working-directory: ${{runner.workspace}}
+      run: rm -rf ./*
