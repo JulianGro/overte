@@ -84,7 +84,7 @@ class Overte(ConanFile):
         self.requires("jsoncpp/1.9.6", force=True)
         openssl = "openssl/1.1.1q"
 
-        self.requires("glslang/[>=1.3.268.0 <2.0]")
+        self.requires("glslang/[>=11.7.0 11.7.0]")
         self.requires("spirv-cross/[>=1.3.268.0 <2.0]")
         self.requires("spirv-tools/[>=1.3.268.0 <2.0]")
 
