@@ -48,6 +48,7 @@
 #include "ScriptValue.h"
 #include "ScriptException.h"
 #include "Vec3.h"
+#include "ScriptEngine.h"
 
 static const QString NO_SCRIPT("");
 
@@ -1284,6 +1285,16 @@ public:
      */
     bool isDoneRunning() { return _isDoneRunning; };
 
+    /**
+     * @brief Adds `console` namespace with functions such as `console.log`.
+     *
+     * Called during script manager registration and in `ScriptEngineV8::evaluateInClosure`, which happens during
+     * `Script.require` call.
+     * @param scopeGuard Pointer to a script engine scope guard.
+     * @param scriptEngine Pointer to the script engine to which `console` namespace will be added.
+     */
+    void registerConsoleScriptingInterface(ScriptEngine::ScriptEngineScopeGuard* scopeGuard, ScriptEngine* scriptEngine);
+
 public slots:
 
     /**
@@ -1678,17 +1689,17 @@ protected:
     qint64 _lastUpdate;
 
     QString _fileNameString;
-    Quat _quatLibrary;
-    Vec3 _vec3Library;
-    Mat4 _mat4Library;
-    ScriptUUID _uuidLibrary;
-    ConsoleScriptingInterface _consoleScriptingInterface;
+    std::shared_ptr<Quat> _quatLibrary;
+    std::shared_ptr<Vec3> _vec3Library;
+    std::shared_ptr<Mat4> _mat4Library;
+    std::shared_ptr<ScriptUUID> _uuidLibrary;
+    std::shared_ptr<ConsoleScriptingInterface> _consoleScriptingInterface;
     std::atomic<bool> _isUserLoaded { false };
     bool _isReloading { false };
 
     std::atomic<bool> _quitWhenFinished;
 
-    AssetScriptingInterface* _assetScriptingInterface;
+    std::shared_ptr<AssetScriptingInterface> _assetScriptingInterface;
 
     std::function<bool()> _emitScriptUpdates{ []() { return true; }  };
 

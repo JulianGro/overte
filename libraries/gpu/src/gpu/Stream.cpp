@@ -64,7 +64,12 @@ void Stream::Format::evaluateCache() {
 
     for(AttributeMap::iterator it = _attributes.begin(); it != _attributes.end(); it++) {
         Attribute& attrib = (*it).second;
+        if (0 == _channels.count(attrib._channel)) {
+            _channels[attrib._channel]._frequency = attrib._frequency;
+        }
         ChannelInfo& channel = _channels[attrib._channel];
+        // All attributes within a channel must have the same frequency
+        assert(attrib._frequency == channel._frequency);
         channel._slots.push_back(attrib._slot);
         channel._stride = std::max(channel._stride, attrib.getSize() + attrib._offset);
         channel._netSize += attrib.getSize();
@@ -76,18 +81,6 @@ void Stream::Format::evaluateCache() {
 
 bool Stream::Format::setAttribute(Slot slot, Slot channel, Element element, Offset offset, Frequency frequency) {
     _attributes[slot] = Attribute((InputSlot) slot, channel, element, offset, frequency);
-    evaluateCache();
-    return true;
-}
-
-bool Stream::Format::setAttribute(Slot slot, Frequency frequency) {
-    _attributes[slot] = Attribute((InputSlot)slot, slot, getDefaultElements()[slot], 0, frequency);
-    evaluateCache();
-    return true;
-}
-
-bool Stream::Format::setAttribute(Slot slot, Slot channel, Frequency frequency) {
-    _attributes[slot] = Attribute((InputSlot)slot, channel, getDefaultElements()[slot], 0, frequency);
     evaluateCache();
     return true;
 }
@@ -105,17 +98,4 @@ void BufferStream::addBuffer(const BufferPointer& buffer, Offset offset, Offset 
     _buffers.push_back(buffer);
     _offsets.push_back(offset);
     _strides.push_back(stride);
-}
-
-BufferStream BufferStream::makeRangedStream(uint32 offset, uint32 count) const {
-    if ((offset < _buffers.size())) {
-        auto rangeSize = std::min(count, (uint32)(_buffers.size() - offset));
-        BufferStream newStream;
-        newStream._buffers.insert(newStream._buffers.begin(), _buffers.begin() + offset, _buffers.begin() + offset + rangeSize);
-        newStream._offsets.insert(newStream._offsets.begin(), _offsets.begin() + offset, _offsets.begin() + offset + rangeSize);
-        newStream._strides.insert(newStream._strides.begin(), _strides.begin() + offset, _strides.begin() + offset + rangeSize);
-        return newStream;
-    }
-
-    return BufferStream();
 }

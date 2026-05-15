@@ -157,7 +157,7 @@ void GLBackend::init() {
         GPUIdent* gpu = GPUIdent::getInstance(vendor, renderer);
 
 // Do not try to get texture memory information on unsupported systems.
-#if defined(Q_OS_ANDROID) || defined(USE_GLES) || defined(Q_OS_DARWIN)
+#if defined(Q_OS_ANDROID) || defined(Q_OS_DARWIN)
         qCDebug(gpugllogging) << "Automatic texture memory not supported in this configuration";
         _videoCard = Unknown;
         _dedicatedMemory = (size_t)(gpu->getMemory()) * BYTES_PER_MIB;
@@ -225,9 +225,7 @@ void GLBackend::init() {
         qCDebug(gpugllogging) << "\tmax uniform binding:" << MAX_COMBINED_UNIFORM_BLOCKS;
         qCDebug(gpugllogging) << "\tmax uniform size:" << MAX_UNIFORM_BLOCK_SIZE;
         qCDebug(gpugllogging) << "\tuniform alignment:" << UNIFORM_BUFFER_OFFSET_ALIGNMENT;
-#if !defined(USE_GLES)
         qCDebug(gpugllogging, "V-Sync is %s\n", (::gl::getSwapInterval() > 0 ? "ON" : "OFF"));
-#endif
     });
 }
 
@@ -238,12 +236,12 @@ size_t GLBackend::getAvailableMemory() {
 
     switch( _videoCard ) {
         case NVIDIA:
-#if !defined(Q_OS_ANDROID) && !defined(USE_GLES)
+#if !defined(Q_OS_ANDROID)
             glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &mem[0]);
 #endif
             return (size_t)(mem[0]) * BYTES_PER_KIB;
         case ATI:
-#if !defined(Q_OS_ANDROID) && !defined(USE_GLES)
+#if !defined(Q_OS_ANDROID)
             glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, &mem[0]);
 #endif
             return (size_t)(mem[0]) * BYTES_PER_KIB;
@@ -508,7 +506,7 @@ void GLBackend::renderPassDraw(const Batch& batch) {
 // Support annotating captures in tools like Renderdoc
 class GlDuration {
 public:
-#ifdef USE_GLES
+#ifdef Q_OS_ANDROID
     GlDuration(const char* name) {
         // We need to use strlen here instead of -1, because the Snapdragon profiler
         // will crash otherwise 
@@ -586,6 +584,14 @@ void GLBackend::render(const Batch& batch) {
         batch._mustUpdatePreviousModels = false;
     }
 }
+
+void GLBackend::executeFrame(const FramePointer& frame) {
+    // Execute the frame rendering commands
+    for (auto& batch : frame->batches) {
+        render(*batch);
+    }
+}
+
 
 
 void GLBackend::syncCache() {
@@ -673,7 +679,7 @@ void GLBackend::resetStages() {
 
 void GLBackend::do_pushProfileRange(const Batch& batch, size_t paramOffset) {
     if (trace_render_gpu_gl_detail().isDebugEnabled()) {
-        auto name = batch._profileRanges.get(batch._params[paramOffset]._uint);
+        const auto& name = batch._profileRanges.get(batch._params[paramOffset]._uint);
         profileRanges.push_back(name);
 #if defined(NSIGHT_FOUND)
         nvtxRangePush(name.c_str());
@@ -690,9 +696,8 @@ void GLBackend::do_popProfileRange(const Batch& batch, size_t paramOffset) {
     }
 }
 
-
 // TODO: As long as we have gl calls explicitely issued from interface
-// code, we need to be able to record and batch these calls. THe long 
+// code, we need to be able to record and batch these calls. THe long
 // term strategy is to get rid of any GL calls in favor of the HIFI GPU API
 
 void GLBackend::do_glUniform1i(const Batch& batch, size_t paramOffset) {

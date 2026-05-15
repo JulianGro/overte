@@ -187,6 +187,39 @@ public:
     Q_DECLARE_FLAGS(QObjectWrapOptions, QObjectWrapOption);
 
 public:
+
+    /**
+     * @brief Class used as a base for script engine-specific thread safety guards.
+     *
+     * Constructing the guard while holding the guard in the same thread must be possible.
+     *
+     */
+    class ScriptEngineScopeGuard {
+    protected:
+        ScriptEngineScopeGuard() = default;
+
+        // prevent copy and move
+        ScriptEngineScopeGuard(const ScriptEngineScopeGuard&) = delete;
+        ScriptEngineScopeGuard(ScriptEngineScopeGuard&&) = delete;
+        ScriptEngineScopeGuard& operator=(const ScriptEngineScopeGuard&) = delete;
+        ScriptEngineScopeGuard& operator=(ScriptEngineScopeGuard&&) = delete;
+    public:
+        virtual ~ScriptEngineScopeGuard() = default;
+    };
+
+    /**
+     * @brief Creates a thread safety scope guard
+     *
+     * A scope guard needs to be created before any script engine access and destroyed afterwards.
+     * This function is thread safe, if a scope guard is being created while another thread is using the script engine,
+     * function will block until the scope guard on another thread is destroyed.
+     *
+     * Constructing the guard while holding the guard in the same thread is possible.
+     *
+     * @return Smart pointer to newly created scope guard
+     */
+    virtual std::unique_ptr<ScriptEngineScopeGuard> getScopeGuard() = 0;
+
     /**
      * @brief Stops the currently running script
      *
@@ -223,7 +256,7 @@ public:
     /**
      * @brief Evaluates a pre-compiled program
      *
-     * @param program Program to evaluaate
+     * @param program Program to evaluate
      * @return ScriptValue
      */
     virtual ScriptValue evaluate(const ScriptProgramPointer &program) = 0;
@@ -346,11 +379,11 @@ public:
     virtual bool raiseException(const QString& error, const QString &reason = QString()) = 0;
 
 
-    virtual void registerEnum(const QString& enumName, QMetaEnum newEnum) = 0;
-    virtual void registerFunction(const QString& name, FunctionSignature fun, int numArguments = -1) = 0;
-    virtual void registerFunction(const QString& parent, const QString& name, FunctionSignature fun, int numArguments = -1) = 0;
-    virtual void registerGetterSetter(const QString& name, FunctionSignature getter, FunctionSignature setter, const QString& parent = QString("")) = 0;
-    virtual void registerGlobalObject(const QString& name, QObject* object, ScriptEngine::ValueOwnership = ScriptEngine::QtOwnership) = 0;
+    virtual void registerEnum(ScriptEngineScopeGuard* scopeGuard, const QString& enumName, QMetaEnum newEnum) = 0;
+    virtual void registerFunction(ScriptEngineScopeGuard* scopeGuard, const QString& name, FunctionSignature fun, int numArguments = -1) = 0;
+    virtual void registerFunction(ScriptEngineScopeGuard* scopeGuard, const QString& parent, const QString& name, FunctionSignature fun, int numArguments = -1) = 0;
+    virtual void registerGetterSetter(ScriptEngineScopeGuard* scopeGuard, const QString& name, FunctionSignature getter, FunctionSignature setter, const QString& parent = QString("")) = 0;
+    virtual void registerGlobalObject(ScriptEngineScopeGuard* scopeGuard, const QString& name, QObject* object, ScriptEngine::ValueOwnership = ScriptEngine::QtOwnership) = 0;
     virtual void setDefaultPrototype(int metaTypeId, const ScriptValue& prototype) = 0;
     virtual void setObjectName(const QString& name) = 0;
     virtual bool setProperty(const char* name, const QVariant& value) = 0;
@@ -372,6 +405,12 @@ public:
 
     virtual void updateMemoryCost(const qint64& deltaSize) = 0;
     virtual void requestCollectGarbage() = 0;
+
+    /**
+     * @brief Tells the script engine to process any events it may have queued internally.
+     * Used by V8 for async functions and WebAssembly compilation.
+     */
+    virtual void processEvents() = 0;
 
     /**
      * @brief Test the underlying scripting engine

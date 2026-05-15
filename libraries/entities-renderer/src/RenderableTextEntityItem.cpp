@@ -122,6 +122,10 @@ ItemKey TextEntityRenderer::getKey() {
 }
 
 ShapeKey TextEntityRenderer::getShapeKey() {
+    // TODO: ShapeKey::Builder has no way of setting a specific
+    // depth offset like we'd need to offset both the background
+    // and payload in order, so the text payload is hardcoded
+    // to have a higher depth bias (-2) than the background (-1)
     auto builder = render::ShapeKey::Builder().withDepthBias();
     updateShapeKeyBuilderFromMaterials(builder);
     return builder.build();
@@ -294,7 +298,11 @@ ShapeKey entities::TextPayload::getShapeKey() const {
         if (renderable) {
             auto textRenderable = std::static_pointer_cast<TextEntityRenderer>(renderable);
 
-            auto builder = render::ShapeKey::Builder().withOwnPipeline();
+            // TODO: ShapeKey::Builder has no way of setting a specific
+            // depth offset like we'd need to offset both the background
+            // and payload in order, so the text payload is hardcoded
+            // to have a higher depth bias (-2) than the background (-1)
+            auto builder = render::ShapeKey::Builder().withOwnPipeline().withDepthBias();
             if (textRenderable->isTextTransparent()) {
                 builder.withTranslucent();
             }
@@ -382,17 +390,17 @@ void entities::TextPayload::render(RenderArgs* args) {
     if (fontHeight > 0.0f) {
         scale = textRenderable->_lineHeight / fontHeight;
     }
-    transform.postTranslate(glm::vec3(-0.5, 0.5, 1.0f + EPSILON / dimensions.z));
+    transform.postTranslate(glm::vec3(-0.5f, 0.5f, 0.0f));
     transform.setScale(scale);
     batch.setModelTransform(transform, _prevRenderTransform);
     if (args->_renderMode == Args::RenderMode::DEFAULT_RENDER_MODE || args->_renderMode == Args::RenderMode::MIRROR_RENDER_MODE) {
         _prevRenderTransform = transform;
     }
 
-    bool fading = !forward && ShapeKey(args->_itemShapeKey).isFaded();
+    bool fading = !forward && ShapeKey(args->_itemShapeKey).isFaded() && args->_batch != nullptr;
     if (fading) {
-        FadeEffect::getBatchSetter()(*args->_shapePipeline, *args->_batch, args);
-        FadeEffect::getItemUniformSetter()(*args->_shapePipeline, args, AbstractViewStateInterface::instance()->getMain3DScene()->getItem(textRenderable->_textRenderID));
+        FadeEffect::getBatchSetter()(nullptr, *args->_batch, args);
+        FadeEffect::getItemUniformSetter()(nullptr, args, AbstractViewStateInterface::instance()->getMain3DScene()->getItem(textRenderable->_textRenderID));
     }
 
     glm::vec2 bounds = glm::vec2(dimensions.x - (textRenderable->_leftMargin + textRenderable->_rightMargin), dimensions.y - (textRenderable->_topMargin + textRenderable->_bottomMargin));

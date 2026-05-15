@@ -362,17 +362,67 @@ glm::mat4 OpenVrDisplayPlugin::getEyeProjection(Eye eye, const glm::mat4& basePr
     }
 }
 
+inline static glm::mat4 fovToCullingProjection(const std::array<float, 4> fov, const float _near, const float _far) {
+    const float left = fov[0];
+    const float right = fov[1];
+    const float down = fov[2];
+    const float up = fov[3];
+
+    const float width = right - left;
+    const float height = up - down;
+
+    const float m11 = 2 / width;
+    const float m22 = 2 / height;
+    const float m33 = -(_far + _near) / (_far - _near);
+
+    const float m31 = (right + left) / width;
+    const float m32 = (up + down) / height;
+    const float m43 = -(_far * (_near + _near)) / (_far - _near);
+
+    // clang-format off
+    const float mat[16] = {
+        m11, 0  , 0  ,  0,
+        0  , m22, 0  ,  0,
+        m31, m32, m33, -1,
+        0  , 0  , m43,  0,
+    };
+    // clang-format on
+
+    return glm::make_mat4(mat);
+}
+
 glm::mat4 OpenVrDisplayPlugin::getCullingProjection(const glm::mat4& baseProjection) const {
-    if (_system) {
-        ViewFrustum baseFrustum;
-        baseFrustum.setProjection(baseProjection);
-        float baseNearClip = baseFrustum.getNearClip();
-        float baseFarClip = baseFrustum.getFarClip();
-        // FIXME Calculate the proper combined projection by using GetProjectionRaw values from both eyes
-        return toGlm(_system->GetProjectionMatrix((vr::EVREye)0, baseNearClip, baseFarClip));
-    } else {
+    if (!_system) {
         return baseProjection;
     }
+
+    std::array<std::array<float, 4>, 2> fovs;
+
+    for (auto i = 0; i < 2; i++) {
+        _system->GetProjectionRaw(
+            (vr::EVREye)i,
+            &fovs[i][0],
+            &fovs[i][1],
+            &fovs[i][2],
+            &fovs[i][3]
+        );
+    }
+
+    // FIXME: OpenVR gives us tan(angle), how can we clamp
+    // this to within ~170° when multiplied by margin?
+    // const float maxAngle = 0.9f * PI;
+    const float margin = 1.0f;
+
+    std::array<float, 4> fovMax = {
+        std::min(fovs[0][0], fovs[1][0]) * margin, // left
+        std::max(fovs[0][1], fovs[1][1]) * margin, // right
+        std::min(fovs[0][2], fovs[1][2]) * margin, // bottom (flipped)
+        std::max(fovs[0][3], fovs[1][3]) * margin, // top (flipped)
+    };
+
+    ViewFrustum frustum;
+    frustum.setProjection(baseProjection);
+    return fovToCullingProjection(fovMax, frustum.getNearClip(), frustum.getFarClip());
 }
 
 float OpenVrDisplayPlugin::getTargetFrameRate() const {
@@ -460,8 +510,7 @@ bool OpenVrDisplayPlugin::internalActivate() {
             _eyeOffsets[eye] = toGlm(_system->GetEyeToHeadTransform(eye));
             _eyeProjections[eye] = toGlm(_system->GetProjectionMatrix(eye, DEFAULT_NEAR_CLIP, DEFAULT_FAR_CLIP));
         });
-        // FIXME Calculate the proper combined projection by using GetProjectionRaw values from both eyes
-        _cullingProjection = _eyeProjections[0];
+        _cullingProjection = getCullingProjection(_eyeProjections[0]);
     });
 
     // enable async time warp
@@ -528,7 +577,10 @@ void OpenVrDisplayPlugin::customizeContext() {
                                                                               _renderTargetSize.y, gpu::Texture::SINGLE_MIP,
                                                                               Sampler(Sampler::FILTER_MIN_MAG_POINT));
             }
-            _compositeInfos[i].textureID = getGLBackend()->getTextureID(_compositeInfos[i].texture);
+            auto backend = getBackend();
+            auto glBackend = std::dynamic_pointer_cast<gpu::gl::GLBackend>(backend);
+            Q_ASSERT(glBackend);
+            _compositeInfos[i].textureID = glBackend->getTextureID(_compositeInfos[i].texture);
         }
         _submitThread->_canvas = _submitCanvas;
         _submitThread->start(QThread::HighPriority);
@@ -649,7 +701,10 @@ void OpenVrDisplayPlugin::compositeLayers() {
         glFlush();
 
         if (!newComposite.textureID) {
-            newComposite.textureID = getGLBackend()->getTextureID(newComposite.texture);
+            auto backend = getBackend();
+            auto glBackend = std::dynamic_pointer_cast<gpu::gl::GLBackend>(backend);
+            Q_ASSERT(glBackend);
+            newComposite.textureID = glBackend->getTextureID(newComposite.texture);
         }
         withPresentThreadLock([&] { _submitThread->update(newComposite); });
     }
@@ -666,7 +721,10 @@ void OpenVrDisplayPlugin::hmdPresent() {
         _visionSqueezeParametersBuffer.edit<VisionSqueezeParameters>()._rightProjection = _eyeProjections[1];
         _visionSqueezeParametersBuffer.edit<VisionSqueezeParameters>()._hmdSensorMatrix = _currentPresentFrameInfo.presentPose;
 
-        GLuint glTexId = getGLBackend()->getTextureID(_compositeFramebuffer->getRenderBuffer(0));
+        auto backend = getBackend();
+        auto glBackend = std::dynamic_pointer_cast<gpu::gl::GLBackend>(backend);
+        Q_ASSERT(glBackend);
+        GLuint glTexId = glBackend->getTextureID(_compositeFramebuffer->getRenderBuffer(0));
         vr::Texture_t vrTexture{ (void*)(uintptr_t)glTexId, vr::TextureType_OpenGL, vr::ColorSpace_Auto };
         vr::VRCompositor()->Submit(vr::Eye_Left, &vrTexture, &OPENVR_TEXTURE_BOUNDS_LEFT);
         vr::VRCompositor()->Submit(vr::Eye_Right, &vrTexture, &OPENVR_TEXTURE_BOUNDS_RIGHT);

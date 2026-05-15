@@ -27,22 +27,11 @@ static const uint32_t INVALID_PROGRAM = (uint32_t)-1;
 const std::vector<uint32_t>& startupPrograms();
 const std::vector<uint32_t>& allShaders();
 
-enum class Dialect
-{
-#if defined(USE_GLES)
-    // GLES only support 3.1 es
-    glsl310es,
-#elif defined(Q_OS_MAC)
-    // Mac only supports 4.1
-    glsl410,
-#else
-    // Everything else supports 4.1 and 4.5
+enum class Dialect {
     glsl450,
     glsl410,
-#endif
+    glsl310es,
 };
-
-extern const Dialect DEFAULT_DIALECT;
 
 const std::vector<Dialect>& allDialects();
 const std::string& dialectPath(Dialect dialect);
@@ -97,6 +86,10 @@ struct Reflection {
     // Needed for procedural code, will map to push constants for Vulkan
     LocationMap uniforms;
 
+    size_t descriptorCount() const {
+        return textures.size() + uniformBuffers.size() + resourceBuffers.size();
+    }
+
     static std::vector<std::string> getNames(const LocationMap& locations);
 
 private:
@@ -121,7 +114,7 @@ struct DialectVariantSource {
     // Optimized SPIRV version of the shader
     Binary spirv;
     // Regenerated GLSL from the optimized SPIRV
-    //String glsl;
+    String glsl;
     // Shader reflection from the optimized SPIRV
     Reflection reflection;
 
@@ -141,6 +134,9 @@ struct Source {
 
     // The name of the shader file, with extension, i.e. DrawColor.frag
     std::string name;
+
+    // Generic reflection, copied from the 450 dialect / mono variant
+    Reflection reflection;
 
     // Map of platforms to their specific shaders
     std::unordered_map<Dialect, DialectSource, EnumClassHash> dialectSources;
@@ -171,6 +167,10 @@ inline uint32_t getVertexId(uint32_t programId) {
 
 inline uint32_t getFragmentId(uint32_t programId) {
     return programId & UINT16_MAX;
+}
+
+inline uint32_t makeProgramId(uint32_t vertexId, uint32_t fragmentId) {
+    return (vertexId << 16) | fragmentId;
 }
 
 }  // namespace shader

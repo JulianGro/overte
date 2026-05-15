@@ -94,6 +94,7 @@
 #include <scripting/SettingsScriptingInterface.h>
 #include <scripting/TestScriptingInterface.h>
 #include <scripting/WindowScriptingInterface.h>
+#include <scripting/OSCScriptingInterface.h>
 #ifndef Q_OS_ANDROID
 #include <shared/FileLogger.h>
 #endif
@@ -130,6 +131,9 @@
 #include "SpeechRecognizer.h"
 #endif
 #include "Util.h"
+#ifndef USE_GL
+#include "vk/VKWindow.h"
+#endif
 
 #if defined(Q_OS_WIN)
 #include "WindowsSystemInfo.h"
@@ -208,11 +212,16 @@ void messageHandler(QtMsgType type, const QMessageLogContext& context, const QSt
 
 Application::Application(
     int& argc, char** argv,
-    const QCommandLineParser& parser,
     QElapsedTimer& startupTimer
 ) :
     QApplication(argc, argv),
+#ifdef USE_GL
     _window(new MainWindow(desktop())),
+#else
+    _vkWindow(new VKWindow()),
+    _vkWindowWrapper(QWidget::createWindowContainer(_vkWindow)),
+    _window(new MainWindow(_vkWindowWrapper)),
+#endif
     // Menu needs to be initialized before other initializers. Otherwise deadlock happens on qApp->getWindow()->menuBar().
     _isMenuInitialized(initMenu()),
 #ifndef Q_OS_ANDROID
@@ -224,6 +233,7 @@ Application::Application(
     _useDiscordPresence("useDiscordPresence", true),
     _firstRun(Settings::firstRun, true),
     _previousScriptLocation("LastScriptLocation", DESKTOP_LOCATION),
+    _previousPreferredDisplayMode("previousPreferredDisplayMode", 0),
     // UI
     _hmdTabletScale("hmdTabletScale", DEFAULT_HMD_TABLET_SCALE_PERCENT),
     _desktopTabletScale("desktopTabletScale", DEFAULT_DESKTOP_TABLET_SCALE_PERCENT),
@@ -244,6 +254,7 @@ Application::Application(
     _fieldOfView("fieldOfView", DEFAULT_FIELD_OF_VIEW_DEGREES),
     _cameraClippingEnabled("cameraClippingEnabled", false)
 {
+
     setProperty(hifi::properties::CRASHED, _previousSessionCrashed);
 
     LogHandler::getInstance().moveToThread(thread());
@@ -528,6 +539,8 @@ void Application::copyToClipboard(const QString& text) {
 
 void Application::registerScriptEngineWithApplicationServices(ScriptManagerPointer& scriptManager) {
     auto scriptEngine = scriptManager->engine();
+    auto scopeGuard = scriptEngine->getScopeGuard();
+    auto* sgp = scopeGuard.get();
     scriptManager->setEmitScriptUpdatesFunction([this]() {
         SharedNodePointer entityServerNode = DependencyManager::get<NodeList>()->soloNodeOfType(NodeType::EntityServer);
         return !entityServerNode || isPhysicsEnabled();
@@ -540,122 +553,125 @@ void Application::registerScriptEngineWithApplicationServices(ScriptManagerPoint
     entityScriptingInterface->setEntityTree(getEntities()->getTree());
 
     if (property(hifi::properties::TEST).isValid()) {
-        scriptEngine->registerGlobalObject("Test", TestScriptingInterface::getInstance());
+        scriptEngine->registerGlobalObject(sgp, "Test", TestScriptingInterface::getInstance());
     }
 
-    scriptEngine->registerGlobalObject("PlatformInfo", PlatformInfoScriptingInterface::getInstance());
-    scriptEngine->registerGlobalObject("Rates", new RatesScriptingInterface(this));
+    scriptEngine->registerGlobalObject(sgp, "PlatformInfo", PlatformInfoScriptingInterface::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Rates", new RatesScriptingInterface(this));
 
-    scriptEngine->registerGlobalObject("AvatarList", DependencyManager::get<AvatarManager>().data());
+    scriptEngine->registerGlobalObject(sgp, "AvatarList", DependencyManager::get<AvatarManager>().data());
 
-    scriptEngine->registerGlobalObject("Camera", &_myCamera);
+    scriptEngine->registerGlobalObject(sgp, "Camera", &_myCamera);
 
 #if defined(Q_OS_MAC) || defined(Q_OS_WIN)
-    scriptEngine->registerGlobalObject("SpeechRecognizer", DependencyManager::get<SpeechRecognizer>().data());
+    scriptEngine->registerGlobalObject(sgp, "SpeechRecognizer", DependencyManager::get<SpeechRecognizer>().data());
 #endif
 
     ClipboardScriptingInterface* clipboardScriptable = new ClipboardScriptingInterface();
-    scriptEngine->registerGlobalObject("Clipboard", clipboardScriptable);
+    scriptEngine->registerGlobalObject(sgp, "Clipboard", clipboardScriptable);
     connect(scriptManager.get(), &ScriptManager::finished, clipboardScriptable, &ClipboardScriptingInterface::deleteLater);
 
-    scriptEngine->registerGlobalObject("Overlays", &_overlays);
+    scriptEngine->registerGlobalObject(sgp, "Overlays", &_overlays);
 
     bool clientScript = scriptManager->isClientScript();
 
 #if !defined(DISABLE_QML)
-    scriptEngine->registerGlobalObject("OffscreenFlags", getOffscreenUI()->getFlags());
+    scriptEngine->registerGlobalObject(sgp, "OffscreenFlags", getOffscreenUI()->getFlags());
     if (clientScript) {
-        scriptEngine->registerGlobalObject("Desktop", DependencyManager::get<DesktopScriptingInterface>().data());
+        scriptEngine->registerGlobalObject(sgp, "Desktop", DependencyManager::get<DesktopScriptingInterface>().data());
     } else {
         auto desktopScriptingInterface = new DesktopScriptingInterface(nullptr, true);
-        scriptEngine->registerGlobalObject("Desktop", desktopScriptingInterface);
+        scriptEngine->registerGlobalObject(sgp, "Desktop", desktopScriptingInterface);
         if (QThread::currentThread() != thread()) {
             desktopScriptingInterface->moveToThread(thread());
         }
     }
 #endif
 
-    scriptEngine->registerGlobalObject("Toolbars", DependencyManager::get<ToolbarScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Toolbars", DependencyManager::get<ToolbarScriptingInterface>().data());
 
-    scriptEngine->registerGlobalObject("Tablet", DependencyManager::get<TabletScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Tablet", DependencyManager::get<TabletScriptingInterface>().data());
     // FIXME remove these deprecated names for the tablet scripting interface
-    scriptEngine->registerGlobalObject("tabletInterface", DependencyManager::get<TabletScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "tabletInterface", DependencyManager::get<TabletScriptingInterface>().data());
 
     auto toolbarScriptingInterface = DependencyManager::get<ToolbarScriptingInterface>().data();
     DependencyManager::get<TabletScriptingInterface>().data()->setToolbarScriptingInterface(toolbarScriptingInterface);
 
-    scriptEngine->registerGlobalObject("Window", DependencyManager::get<WindowScriptingInterface>().data());
-    scriptEngine->registerGetterSetter("location", LocationScriptingInterface::locationGetter,
+    scriptEngine->registerGlobalObject(sgp, "Window", DependencyManager::get<WindowScriptingInterface>().data());
+    scriptEngine->registerGetterSetter(sgp, "location", LocationScriptingInterface::locationGetter,
                         LocationScriptingInterface::locationSetter, "Window");
     // register `location` on the global object.
-    scriptEngine->registerGetterSetter("location", LocationScriptingInterface::locationGetter,
+    scriptEngine->registerGetterSetter(sgp, "location", LocationScriptingInterface::locationGetter,
                                        LocationScriptingInterface::locationSetter);
 
-    scriptEngine->registerFunction("OverlayWindow", clientScript ? QmlWindowClass::constructor : QmlWindowClass::restricted_constructor);
+    scriptEngine->registerFunction(sgp, "OverlayWindow", clientScript ? QmlWindowClass::constructor : QmlWindowClass::restricted_constructor);
 #if !defined(Q_OS_ANDROID) && !defined(DISABLE_QML)
-    scriptEngine->registerFunction("OverlayWebWindow", clientScript ? QmlWebWindowClass::constructor : QmlWebWindowClass::restricted_constructor);
+    scriptEngine->registerFunction(sgp, "OverlayWebWindow", clientScript ? QmlWebWindowClass::constructor : QmlWebWindowClass::restricted_constructor);
 #endif
-    scriptEngine->registerFunction("QmlFragment", clientScript ? QmlFragmentClass::constructor : QmlFragmentClass::restricted_constructor);
+    scriptEngine->registerFunction(sgp, "QmlFragment", clientScript ? QmlFragmentClass::constructor : QmlFragmentClass::restricted_constructor);
 
-    scriptEngine->registerGlobalObject("Menu", MenuScriptingInterface::getInstance());
-    scriptEngine->registerGlobalObject("DesktopPreviewProvider", DependencyManager::get<DesktopPreviewProvider>().data());
+    scriptEngine->registerGlobalObject(sgp, "Menu", MenuScriptingInterface::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "DesktopPreviewProvider", DependencyManager::get<DesktopPreviewProvider>().data());
 #if !defined(DISABLE_QML)
-    scriptEngine->registerGlobalObject("Stats", Stats::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Stats", Stats::getInstance());
 #endif
-    scriptEngine->registerGlobalObject("Settings", SettingsScriptingInterface::getInstance());
-    scriptEngine->registerGlobalObject("Snapshot", DependencyManager::get<Snapshot>().data());
-    scriptEngine->registerGlobalObject("AudioStats", DependencyManager::get<AudioClient>()->getStats().data());
-    scriptEngine->registerGlobalObject("AudioScope", DependencyManager::get<AudioScope>().data());
-    scriptEngine->registerGlobalObject("AvatarBookmarks", DependencyManager::get<AvatarBookmarks>().data());
-    scriptEngine->registerGlobalObject("LocationBookmarks", DependencyManager::get<LocationBookmarks>().data());
+    scriptEngine->registerGlobalObject(sgp, "Settings", SettingsScriptingInterface::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Snapshot", DependencyManager::get<Snapshot>().data());
+    scriptEngine->registerGlobalObject(sgp, "AudioStats", DependencyManager::get<AudioClient>()->getStats().data());
+    scriptEngine->registerGlobalObject(sgp, "AudioScope", DependencyManager::get<AudioScope>().data());
+    scriptEngine->registerGlobalObject(sgp, "AvatarBookmarks", DependencyManager::get<AvatarBookmarks>().data());
+    scriptEngine->registerGlobalObject(sgp, "LocationBookmarks", DependencyManager::get<LocationBookmarks>().data());
 
-    scriptEngine->registerGlobalObject("RayPick", DependencyManager::get<RayPickScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("Picks", DependencyManager::get<PickScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("Pointers", DependencyManager::get<PointerScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "RayPick", DependencyManager::get<RayPickScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Picks", DependencyManager::get<PickScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Pointers", DependencyManager::get<PointerScriptingInterface>().data());
 
     // Caches
-    scriptEngine->registerGlobalObject("AnimationCache", DependencyManager::get<AnimationCacheScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("TextureCache", DependencyManager::get<TextureCacheScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("MaterialCache", DependencyManager::get<MaterialCacheScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("ModelCache", DependencyManager::get<ModelCacheScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("SoundCache", DependencyManager::get<SoundCacheScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "AnimationCache", DependencyManager::get<AnimationCacheScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "TextureCache", DependencyManager::get<TextureCacheScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "MaterialCache", DependencyManager::get<MaterialCacheScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "ModelCache", DependencyManager::get<ModelCacheScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "SoundCache", DependencyManager::get<SoundCacheScriptingInterface>().data());
 
-    scriptEngine->registerGlobalObject("DialogsManager", _dialogsManagerScriptingInterface);
+    scriptEngine->registerGlobalObject(sgp, "DialogsManager", _dialogsManagerScriptingInterface);
 
-    scriptEngine->registerGlobalObject("Account", AccountServicesScriptingInterface::getInstance()); // DEPRECATED - TO BE REMOVED
-    scriptEngine->registerGlobalObject("GlobalServices", AccountServicesScriptingInterface::getInstance()); // DEPRECATED - TO BE REMOVED
-    scriptEngine->registerGlobalObject("AccountServices", AccountServicesScriptingInterface::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Account", AccountServicesScriptingInterface::getInstance()); // DEPRECATED - TO BE REMOVED
+    scriptEngine->registerGlobalObject(sgp, "GlobalServices", AccountServicesScriptingInterface::getInstance()); // DEPRECATED - TO BE REMOVED
+    scriptEngine->registerGlobalObject(sgp, "AccountServices", AccountServicesScriptingInterface::getInstance());
 
-    scriptEngine->registerGlobalObject("AvatarManager", DependencyManager::get<AvatarManager>().data());
+    scriptEngine->registerGlobalObject(sgp, "AvatarManager", DependencyManager::get<AvatarManager>().data());
 
-    scriptEngine->registerGlobalObject("LODManager", DependencyManager::get<LODManager>().data());
+    scriptEngine->registerGlobalObject(sgp, "LODManager", DependencyManager::get<LODManager>().data());
 
-    scriptEngine->registerGlobalObject("Keyboard", DependencyManager::get<KeyboardScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("Performance", new PerformanceScriptingInterface());
+    scriptEngine->registerGlobalObject(sgp, "Keyboard", DependencyManager::get<KeyboardScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Performance", new PerformanceScriptingInterface());
 
-    scriptEngine->registerGlobalObject("Paths", DependencyManager::get<PathUtils>().data());
+    scriptEngine->registerGlobalObject(sgp, "Paths", DependencyManager::get<PathUtils>().data());
 
-    scriptEngine->registerGlobalObject("HMD", DependencyManager::get<HMDScriptingInterface>().data());
-    scriptEngine->registerFunction("HMD", "getHUDLookAtPosition2D", HMDScriptingInterface::getHUDLookAtPosition2D, 0);
-    scriptEngine->registerFunction("HMD", "getHUDLookAtPosition3D", HMDScriptingInterface::getHUDLookAtPosition3D, 0);
+    scriptEngine->registerGlobalObject(sgp, "HMD", DependencyManager::get<HMDScriptingInterface>().data());
+    scriptEngine->registerFunction(sgp, "HMD", "getHUDLookAtPosition2D", HMDScriptingInterface::getHUDLookAtPosition2D, 0);
+    scriptEngine->registerFunction(sgp, "HMD", "getHUDLookAtPosition3D", HMDScriptingInterface::getHUDLookAtPosition3D, 0);
 
-    scriptEngine->registerGlobalObject("Scene", DependencyManager::get<SceneScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("Render", RenderScriptingInterface::getInstance());
-    scriptEngine->registerGlobalObject("Workload", _gameWorkload._engine->getConfiguration().get());
+    scriptEngine->registerGlobalObject(sgp, "Scene", DependencyManager::get<SceneScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Render", RenderScriptingInterface::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Workload", _gameWorkload._engine->getConfiguration().get());
 
-    scriptEngine->registerGlobalObject("Graphics", DependencyManager::get<GraphicsScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Graphics", DependencyManager::get<GraphicsScriptingInterface>().data());
 
-    scriptEngine->registerGlobalObject("ScriptDiscoveryService", DependencyManager::get<ScriptEngines>().data());
-    scriptEngine->registerGlobalObject("Reticle", getApplicationCompositor().getReticleInterface());
+    scriptEngine->registerGlobalObject(sgp, "OSCSocket", DependencyManager::get<OSCScriptingInterface>().data());
+    scriptEngine->registerFunction(sgp, "OSCSocket", "sendPacket", OSCScriptingInterface::sendPacket, 0);
 
-    scriptEngine->registerGlobalObject("UserActivityLogger", DependencyManager::get<UserActivityLoggerScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("Users", DependencyManager::get<UsersScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "ScriptDiscoveryService", DependencyManager::get<ScriptEngines>().data());
+    scriptEngine->registerGlobalObject(sgp, "Reticle", getApplicationCompositor().getReticleInterface());
+
+    scriptEngine->registerGlobalObject(sgp, "UserActivityLogger", DependencyManager::get<UserActivityLoggerScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "Users", DependencyManager::get<UsersScriptingInterface>().data());
 
     if (auto steamClient = PluginManager::getInstance()->getSteamClientPlugin()) {
-        scriptEngine->registerGlobalObject("Steam", new SteamScriptingInterface(scriptManager.get(), steamClient.get()));
+        scriptEngine->registerGlobalObject(sgp, "Steam", new SteamScriptingInterface(scriptManager.get(), steamClient.get()));
     }
     auto scriptingInterface = DependencyManager::get<controller::ScriptingInterface>();
-    scriptEngine->registerGlobalObject("Controller", scriptingInterface.data());
+    scriptEngine->registerGlobalObject(sgp, "Controller", scriptingInterface.data());
 
     {
         auto connection = std::make_shared<QMetaObject::Connection>();
@@ -672,16 +688,16 @@ void Application::registerScriptEngineWithApplicationServices(ScriptManagerPoint
     UserInputMapper::registerControllerTypes(scriptEngine.get());
 
     auto recordingInterface = DependencyManager::get<RecordingScriptingInterface>();
-    scriptEngine->registerGlobalObject("Recording", recordingInterface.data());
+    scriptEngine->registerGlobalObject(sgp, "Recording", recordingInterface.data());
 
     auto entityScriptServerLog = DependencyManager::get<EntityScriptServerLogClient>();
-    scriptEngine->registerGlobalObject("EntityScriptServerLog", entityScriptServerLog.data());
-    scriptEngine->registerGlobalObject("AvatarInputs", AvatarInputs::getInstance());
-    scriptEngine->registerGlobalObject("Selection", DependencyManager::get<SelectionScriptingInterface>().data());
-    scriptEngine->registerGlobalObject("AddressManager", DependencyManager::get<AddressManager>().data());
-    scriptEngine->registerGlobalObject("About", AboutUtil::getInstance());
-    scriptEngine->registerGlobalObject("HifiAbout", AboutUtil::getInstance());  // Deprecated.
-    scriptEngine->registerGlobalObject("ResourceRequestObserver", DependencyManager::get<ResourceRequestObserver>().data());
+    scriptEngine->registerGlobalObject(sgp, "EntityScriptServerLog", entityScriptServerLog.data());
+    scriptEngine->registerGlobalObject(sgp, "AvatarInputs", AvatarInputs::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "Selection", DependencyManager::get<SelectionScriptingInterface>().data());
+    scriptEngine->registerGlobalObject(sgp, "AddressManager", DependencyManager::get<AddressManager>().data());
+    scriptEngine->registerGlobalObject(sgp, "About", AboutUtil::getInstance());
+    scriptEngine->registerGlobalObject(sgp, "HifiAbout", AboutUtil::getInstance());  // Deprecated.
+    scriptEngine->registerGlobalObject(sgp, "ResourceRequestObserver", DependencyManager::get<ResourceRequestObserver>().data());
 
     // connect this script engines printedMessage signal to the global ScriptEngines these various messages
     auto scriptEngines = DependencyManager::get<ScriptEngines>().data();
@@ -826,7 +842,9 @@ void Application::handleLocalServerConnection() const {
     connect(socket, &QLocalSocket::readyRead, this, &Application::readArgumentsFromLocalSocket);
 
     qApp->getWindow()->raise();
-    qApp->getWindow()->activateWindow();
+#ifdef USE_GL
+    qApp->getWindow()->activateWindow(); //VKTODO
+#endif
 }
 
 void Application::readArgumentsFromLocalSocket() const {
@@ -1962,7 +1980,7 @@ void Application::update(float deltaTime) {
     }
 
      if (shouldCaptureMouse()) {
-        QPoint point = _glWidget->mapToGlobal(_glWidget->geometry().center());
+        QPoint point = _primaryWidget->mapToGlobal(_primaryWidget->geometry().center());
         if (QCursor::pos() != point) {
             _mouseCaptureTarget = point;
             _ignoreMouseMove = true;

@@ -30,9 +30,12 @@ STATIC_SCRIPT_TYPES_INITIALIZER((+[](ScriptManager* manager){
 
 STATIC_SCRIPT_INITIALIZER(+[](ScriptManager* manager){
     auto scriptEngine = manager->engine().get();
+    auto scopeGuard = scriptEngine->getScopeGuard();
+    auto* sgp = scopeGuard.get();
 
-    scriptEngine->registerEnum("Render.RenderMethod",QMetaEnum::fromType<RenderScriptingInterface::RenderMethod>());
-    scriptEngine->registerEnum("AntialiasingMode",QMetaEnum::fromType<AntialiasingSetupConfig::Mode>());
+
+    scriptEngine->registerEnum(sgp, "Render.RenderMethod",QMetaEnum::fromType<RenderScriptingInterface::RenderMethod>());
+    scriptEngine->registerEnum(sgp, "AntialiasingMode",QMetaEnum::fromType<AntialiasingSetupConfig::Mode>());
 });
 
 RenderScriptingInterface* RenderScriptingInterface::getInstance() {
@@ -55,6 +58,7 @@ void RenderScriptingInterface::loadSettings() {
         _hazeEnabled = _hazeEnabledSetting.get();
         _bloomEnabled = _bloomEnabledSetting.get();
         _ambientOcclusionEnabled = _ambientOcclusionEnabledSetting.get();
+        _localLightingEnabled = _localLightingSetting.get();
         _proceduralMaterialsEnabled = _proceduralMaterialsEnabledSetting.get();
         _antialiasingMode = static_cast<AntialiasingSetupConfig::Mode>(_antialiasingModeSetting.get());
         _viewportResolutionScale = _viewportResolutionScaleSetting.get();
@@ -74,6 +78,7 @@ void RenderScriptingInterface::loadSettings() {
     forceHazeEnabled(_hazeEnabled);
     forceBloomEnabled(_bloomEnabled);
     forceAmbientOcclusionEnabled(_ambientOcclusionEnabled);
+    forceLocalLightingEnabled(_localLightingEnabled);
     forceProceduralMaterialsEnabled(_proceduralMaterialsEnabled);
     forceAntialiasingMode(_antialiasingMode);
     forceViewportResolutionScale(_viewportResolutionScale);
@@ -241,6 +246,27 @@ void RenderScriptingInterface::forceAmbientOcclusionEnabled(bool enabled) {
         Menu::getInstance()->setIsOptionChecked(MenuOption::AmbientOcclusion, enabled);
 
         recursivelyUpdateLightingModel("", [enabled] (MakeLightingModelConfig *config) { config->setAmbientOcclusion(enabled); });
+    });
+}
+
+bool RenderScriptingInterface::getLocalLightingEnabled() const {
+    return _localLightingEnabled;
+}
+
+void RenderScriptingInterface::setLocalLightingEnabled(bool enabled) {
+    if (_localLightingEnabled != enabled) {
+        forceLocalLightingEnabled(enabled);
+        emit settingsChanged();
+    }
+}
+
+void RenderScriptingInterface::forceLocalLightingEnabled(bool enabled) {
+    _renderSettingLock.withWriteLock([&] {
+        _localLightingEnabled = (enabled);
+        _localLightingSetting.set(enabled);
+        Menu::getInstance()->setIsOptionChecked(MenuOption::LocalLights, enabled);
+
+        recursivelyUpdateLightingModel("", [enabled] (MakeLightingModelConfig *config) { config->setLocalLighting(enabled); });
     });
 }
 

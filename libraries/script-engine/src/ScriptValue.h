@@ -119,6 +119,10 @@ public:
     inline QVariant toVariant() const;
     inline QObject* toQObject() const;
 
+    // Human-readable string representation of a value,
+    // string objects are returned literally
+    inline QString repr() const;
+
 protected:
     ScriptValueProxy* _proxy;
 };
@@ -127,6 +131,7 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(ScriptValue::PropertyFlags);
 /// [ScriptInterface] Provides an engine-independent interface for QScriptValue
 class ScriptValueProxy {
 public:
+    virtual void enqueueRelease() = 0;
     virtual void release() = 0;
     virtual ScriptValueProxy* copy() const = 0;
 
@@ -178,6 +183,8 @@ public:
     virtual QVariant toVariant() const = 0;
     virtual QObject* toQObject() const = 0;
 
+    virtual QString repr() const = 0;
+
 protected:
     virtual ~ScriptValueProxy() {}  // prevent explicit deletion of base class
 };
@@ -200,12 +207,12 @@ ScriptValue::ScriptValue(const ScriptValue& src) : _proxy(src.ptr()->copy()) {
 
 ScriptValue::~ScriptValue() {
     Q_ASSERT(_proxy != nullptr);
-    _proxy->release();
+    _proxy->enqueueRelease();
 }
 
 ScriptValue& ScriptValue::operator=(const ScriptValue& other) {
     Q_ASSERT(_proxy != nullptr);
-    _proxy->release();
+    _proxy->enqueueRelease();
     _proxy = other.ptr()->copy();
     return *this;
 }
@@ -404,6 +411,11 @@ QVariant ScriptValue::toVariant() const {
 QObject* ScriptValue::toQObject() const {
     Q_ASSERT(_proxy != nullptr);
     return _proxy->toQObject();
+}
+
+QString ScriptValue::repr() const {
+    Q_ASSERT(_proxy != nullptr);
+    return _proxy->repr();
 }
 
 #endif // hifi_ScriptValue_h

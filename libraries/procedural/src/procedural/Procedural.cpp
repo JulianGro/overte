@@ -22,6 +22,7 @@
 #include <NetworkingConstants.h>
 #include <MetaverseAPI.h>
 #include <shaders/Shaders.h>
+#include <shared/GlobalAppProperties.h>
 
 #include "ShaderConstants.h"
 #include "Logging.h"
@@ -133,7 +134,7 @@ Procedural::Procedural(bool useAA) {
         gpu::State::FACTOR_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::ONE);
     transparentStencil(_transparentState);
 
-    _standardInputsBuffer = std::make_shared<gpu::Buffer>(sizeof(StandardInputs), nullptr);
+    _standardInputsBuffer = std::make_shared<gpu::Buffer>(gpu::Buffer::UniformBuffer, sizeof(StandardInputs), nullptr);
 }
 
 void Procedural::setProceduralData(const ProceduralData& proceduralData) {
@@ -260,9 +261,10 @@ void Procedural::setProceduralData(const ProceduralData& proceduralData) {
 }
 
 bool Procedural::isReady() const {
-#if defined(USE_GLES)
-    return false;
-#endif
+    auto backendApi = hifi::properties::getGraphicsAPI();
+    if (backendApi == hifi::properties::GraphicsAPI::GLES32) {
+        return false;
+    }
 
     std::lock_guard<std::mutex> lock(_mutex);
 

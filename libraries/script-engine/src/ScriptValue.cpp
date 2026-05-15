@@ -18,6 +18,7 @@
 //V8TODO name is misleading, it's actually undefined
 class ScriptValueProxyNull final : public ScriptValueProxy {
 public:
+    virtual void enqueueRelease() override;
     virtual void release() override;
     virtual ScriptValueProxy* copy() const override;
 
@@ -67,12 +68,17 @@ public:
     virtual quint32 toUInt32() const override;
     virtual QVariant toVariant() const override;
     virtual QObject* toQObject() const override;
+
+    virtual QString repr() const override;
 };
 
 static ScriptValueProxyNull SCRIPT_VALUE_NULL;
 
 ScriptValue::ScriptValue() : _proxy(&SCRIPT_VALUE_NULL) {}
 
+void ScriptValueProxyNull::enqueueRelease() {
+    // do nothing, we're a singlet
+}
 void ScriptValueProxyNull::release() {
     // do nothing, we're a singlet
 }
@@ -253,4 +259,8 @@ QVariant ScriptValueProxyNull::toVariant() const {
 
 QObject* ScriptValueProxyNull::toQObject() const {
     return nullptr;
+}
+
+QString ScriptValueProxyNull::repr() const {
+    return QString();
 }

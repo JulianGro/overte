@@ -51,6 +51,7 @@ public: // construction
     ScriptEngineV8* getV8Engine() {return _engine;}
 
 public:
+    virtual void enqueueRelease() override;
     virtual void release() override;
     virtual ScriptValueProxy* copy() const override;
 
@@ -103,6 +104,8 @@ public:  // ScriptValue implementation
     virtual quint32 toUInt32() const override;
     virtual QVariant toVariant() const override;
     virtual QObject* toQObject() const override;
+
+    virtual QString repr() const override;
 
 #ifdef OVERTE_V8_SCRIPT_VALUE_WRAPPER_DELETE_GUARD
     // These can be used for debugging crashes caused access after delete

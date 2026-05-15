@@ -15,7 +15,7 @@
 
 <@func declareBeckmannSpecular()@>
 
-LAYOUT(binding=RENDER_UTILS_TEXTURE_SSSC_SPECULAR_BECKMANN) uniform sampler2D scatteringSpecularBeckmann;
+TEXTURE(RENDER_UTILS_TEXTURE_SSSC_SPECULAR_BECKMANN, sampler2D, scatteringSpecularBeckmann);
 
 float fetchSpecularBeckmann(float ndoth, float roughness) {
     return pow(2.0 * texture(scatteringSpecularBeckmann, vec2(ndoth, roughness)).r, 10.0);
@@ -99,7 +99,9 @@ float specularDistribution(SurfaceData surface) {
     float smithInvG1NdotL = evalSmithInvG1(surface.roughness4, surface.ndotl);
     denom *= surface.smithInvG1NdotV * smithInvG1NdotL;
     // Don't divide by PI as this is part of the light normalization factor
-    float power = surface.roughness4 / denom;
+    // NOTE: Epsilon limit has to be here or infinities and unreasonably-bright
+    // pixels can sneak in and break the bloom pass rendering
+    float power = surface.roughness4 / max(0.001, denom);
     return power;
 }
 

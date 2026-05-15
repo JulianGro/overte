@@ -16,9 +16,9 @@
 
 <@if not HIFI_USE_FORWARD@>
     <@include DeferredBufferWrite.slh@>
-    layout(location=RENDER_UTILS_ATTR_PREV_POSITION_CS) in vec4 _prevPositionCS;
+    INPUT(RENDER_UTILS_ATTR_PREV_POSITION_CS, vec4, _prevPositionCS);
 <@else@>
-    layout(location=0) out vec4 _fragColor0;
+    OUTPUT(0, vec4, _fragColor0);
 <@endif@>
 
 struct Grid {
@@ -27,29 +27,39 @@ struct Grid {
     vec4 edge;
 };
 
-LAYOUT(binding=0) uniform gridBuffer {
-  Grid grid;
+UNIFORM_BUFFER(0, gridBuffer) {
+  Grid grid; 
 };
 
-layout(location=GPU_ATTR_TEXCOORD0) in vec2 varTexCoord0;
-layout(location=GPU_ATTR_COLOR) in vec4 varColor;
+INPUT(GPU_ATTR_TEXCOORD0, vec2, varTexCoord0);
+INPUT(GPU_ATTR_TEXCOORD1, vec2, varTexCoord1);
+INPUT(GPU_ATTR_COLOR, vec4, varColor);
+
 
 void main(void) {
+    const float SQRT_2 = 1.4142135623730951;
+
     float gridLine = mix(paintGridMajorMinor(varTexCoord0, grid.offset, grid.period, grid.edge),
                       paintGrid(varTexCoord0, grid.offset.xy, grid.period.xy, grid.edge.xy),
                       float(grid.edge.z == 0.0));
-    if (gridLine <= 0.0) {
-        discard;
-    }
+
+    // multiply by sqrt(2) to hide the chunk pop-in on the corners
+    float fade = clamp(1.0 - (length(varTexCoord1) * SQRT_2), 0.0, 1.0);
+    float gridWeight = gridLine * fade;
+
+    if (gridWeight <= 0.0) { discard; }
+
+    vec4 color = varColor;
+    color.a *= gridWeight;
 
 <@if not HIFI_USE_FORWARD@>
-    vec3 NORMAL = vec3(1.0, 0.0, 0.0);
     <@if not HIFI_USE_TRANSLUCENT@>
-        packDeferredFragmentUnlit(_prevPositionCS, NORMAL, 1.0, varColor.rgb);
+        vec3 NORMAL = vec3(1.0, 0.0, 0.0);
+        packDeferredFragmentUnlit(_prevPositionCS, NORMAL, 1.0, color.rgb);
     <@else@>
-        packDeferredFragmentTranslucent(_prevPositionCS, NORMAL, varColor.a, varColor.rgb, DEFAULT_ROUGHNESS);
+        packDeferredFragmentTranslucentUnlit(color.a, color.rgb);
     <@endif@>
 <@else@>
-    _fragColor0 = varColor;
+    _fragColor0 = color;
 <@endif@>
 }

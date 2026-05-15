@@ -22,7 +22,7 @@ using namespace graphics;
 
 Skybox::Skybox() {
     Schema schema;
-    _schemaBuffer = gpu::BufferView(std::make_shared<gpu::Buffer>(sizeof(Schema), (const gpu::Byte*) &schema));
+    _schemaBuffer = gpu::BufferView(std::make_shared<gpu::Buffer>(gpu::Buffer::UniformBuffer, sizeof(Schema), (const gpu::Byte*) &schema));
 }
 
 void Skybox::setColor(const Color& color) {
@@ -106,13 +106,14 @@ void Skybox::render(gpu::Batch& batch, const ViewFrustum& viewFrustum, const Sky
     viewFrustum.evalViewTransform(viewTransform);
 
     // Orientate view transform to be relative to zone
-    viewTransform.setRotation(skybox.getOrientation() * viewTransform.getRotation());
+    Transform modelTransform;
+    modelTransform.setRotation(skybox.getOrientation());
 
     batch.setProjectionTransform(projMat);
     batch.setViewTransform(viewTransform);
     // This is needed if we want to have motion vectors on the sky
     batch.saveViewProjectionTransform(transformSlot);
-    batch.setModelTransform(Transform()); // only for Mac
+    batch.setModelTransform(modelTransform);
 
     batch.setPipeline(_pipelines[forward]);
     skybox.prepare(batch);

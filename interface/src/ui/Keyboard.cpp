@@ -46,6 +46,7 @@
 #include "raypick/StylusPointer.h"
 #include "GLMHelpers.h"
 #include "Application.h"
+#include "KeyEvent.h"
 
 static const int LEFT_HAND_CONTROLLER_INDEX = 0;
 static const int RIGHT_HAND_CONTROLLER_INDEX = 1;
@@ -378,6 +379,7 @@ void Keyboard::updateTextDisplay() {
 
 void Keyboard::raiseKeyboardAnchor(bool raise) const {
     auto entityScriptingInterface = DependencyManager::get<EntityScriptingInterface>();
+    auto myAvatar = DependencyManager::get<AvatarManager>()->getMyAvatar();
 
     EntityItemProperties properties;
     properties.setVisible(raise);
@@ -386,6 +388,9 @@ void Keyboard::raiseKeyboardAnchor(bool raise) const {
 
     properties.setIgnorePickIntersection(!raise);
     entityScriptingInterface->editEntity(_backPlate.entityID, properties);
+
+    properties.setParentID(raise ? myAvatar->getSelfID() : QUuid());
+    properties.setParentJointIndex(raise ? SENSOR_TO_WORLD_MATRIX_INDEX : 0);
 
     if (_resetKeyboardPositionOnRaise) {
         std::pair<glm::vec3, glm::quat> keyboardLocation = calculateKeyboardPositionAndOrientation();
@@ -873,9 +878,9 @@ void Keyboard::loadKeyboardFile(const QString& keyboardFile) {
             properties.setDimensions(dimensions);
             properties.setPosition(vec3FromVariant(anchorObject["position"].toVariant()));
             properties.setRotation(quatFromVariant(anchorObject["rotation"].toVariant()));
-            properties.setParentID(myAvatar->getSelfID());
-            properties.setParentJointIndex(SENSOR_TO_WORLD_MATRIX_INDEX);
             properties.setUnlit(true);
+            properties.setFadeInMode(COMPONENT_MODE_DISABLED);
+            properties.setFadeOutMode(COMPONENT_MODE_DISABLED);
 
             Anchor anchor;
             anchor.entityID = entityScriptingInterface->addEntityInternal(properties, entity::HostType::LOCAL);
@@ -1092,4 +1097,42 @@ bool Keyboard::containsID(const QUuid& id) const {
     return resultWithReadLock<bool>([&] {
         return _itemsToIgnore.contains(id) || _backPlate.entityID == id;
     });
+}
+
+void Keyboard::emitKeyEvent(const KeyEvent& event, bool pressed) const {
+    Qt::KeyboardModifiers modifiers {};
+
+    if (event.isShifted) {
+        modifiers |= Qt::KeyboardModifier::ShiftModifier;
+    }
+
+    if (event.isControl) {
+        modifiers |= Qt::KeyboardModifier::ControlModifier;
+    }
+
+    if (event.isMeta) {
+        modifiers |= Qt::KeyboardModifier::MetaModifier;
+    }
+
+    if (event.isAlt) {
+        modifiers |= Qt::KeyboardModifier::AltModifier;
+    }
+
+    if (event.isKeypad) {
+        modifiers |= Qt::KeyboardModifier::KeypadModifier;
+    }
+
+    QKeyEvent* qEvent = new QKeyEvent(
+        pressed ? QEvent::KeyPress : QEvent::KeyRelease,
+        event.key,
+        modifiers,
+        event.text,
+        event.isAutoRepeat
+    );
+
+    if (_inputToHudUI) {
+        QCoreApplication::postEvent(qApp->getPrimaryWidget(), qEvent);
+    } else {
+        QCoreApplication::postEvent(QCoreApplication::instance(), qEvent);
+    }
 }

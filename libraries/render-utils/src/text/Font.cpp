@@ -103,6 +103,11 @@ void Font::handleFontNetworkReply() {
 QThreadStorage<size_t> _readOffset;
 QThreadStorage<size_t> _readMax;
 int readHelper(void* dst, int length, void* data) {
+    if (!dst) {
+        qWarning() << "readHelper called with NULL pointer as first argument: dst = " << dst << "; length = " << length << "; data =" << data;
+        return 0;
+    }
+
     if (_readOffset.localData() + length > _readMax.localData()) {
         return -1;
     }
@@ -393,6 +398,13 @@ void Font::setupGPU() {
             } else {
                 PrepareStencil::testMaskDrawShape(*state);
             }
+
+            // TODO: Revisit this once we support specifying depth bias values in ShapeKey
+            // assume the text payload is in front of an already-biased background (bias of -1),
+            // so push the text a little further out so it doesn't z-fight
+            state->setDepthBias(-2.0f);
+            state->setDepthBiasSlopeScale(-2.0f);
+
             _pipelines[std::make_tuple(transparent, unlit, forward, mirror, fade)] = gpu::Pipeline::create(gpu::Shader::createProgram(std::get<5>(key)), state);
         }
 
@@ -430,8 +442,8 @@ inline QuadBuilder adjustedQuadBuilderForAlignmentMode(const Glyph& glyph, glm::
 
 void Font::buildVertices(Font::DrawInfo& drawInfo, const QString& str, const glm::vec2& origin, const glm::vec2& bounds, float scale, bool enlargeForShadows,
                          TextAlignment alignment, TextVerticalAlignment verticalAlignment) {
-    drawInfo.verticesBuffer = std::make_shared<gpu::Buffer>();
-    drawInfo.indicesBuffer = std::make_shared<gpu::Buffer>();
+    drawInfo.verticesBuffer = std::make_shared<gpu::Buffer>(gpu::Buffer::VertexBuffer);
+    drawInfo.indicesBuffer = std::make_shared<gpu::Buffer>(gpu::Buffer::IndexBuffer);
     drawInfo.indexCount = 0;
     int numVertices = 0;
 
@@ -626,7 +638,7 @@ void Font::drawString(gpu::Batch& batch, Font::DrawInfo& drawInfo, const DrawPro
         gpuDrawParams.effectThickness = drawInfo.params.effectThickness;
         gpuDrawParams.effectColor = ColorUtils::sRGBToLinearVec3(drawInfo.params.effectColor);
         if (!drawInfo.paramsBuffer) {
-            drawInfo.paramsBuffer = std::make_shared<gpu::Buffer>(sizeof(DrawParams), nullptr);
+            drawInfo.paramsBuffer = std::make_shared<gpu::Buffer>(gpu::Buffer::UniformBuffer, sizeof(DrawParams), nullptr);
         }
         drawInfo.paramsBuffer->setSubData(0, sizeof(DrawParams), (const gpu::Byte*)&gpuDrawParams);
 

@@ -44,6 +44,9 @@
 #include "ui/overlays/Overlays.h"
 #include "VisionSqueeze.h"
 #include "workload/GameWorkload.h"
+#ifndef USE_GL
+#include "VKCanvas.h"
+#endif
 
 class ArchiveDownloadInterface;
 class AudioInjector;
@@ -86,7 +89,6 @@ class Application : public QApplication,
 public:
     Application(
         int& argc, char** argv,
-        const QCommandLineParser& parser,
         QElapsedTimer& startup_time
     );
     ~Application();
@@ -155,7 +157,11 @@ public:
     // UI
     virtual ui::Menu* getPrimaryMenu() override;
     virtual void showDisplayPluginsTools(bool show) override;
+#ifdef USE_GL
     virtual GLWidget* getPrimaryWidget() override;
+#else
+    virtual VKWidget* getPrimaryWidget() override;
+#endif
     virtual MainWindow* getPrimaryWindow() override;
     virtual QOpenGLContext* getPrimaryContext() override;
     virtual bool isForeground() const override;
@@ -487,8 +493,8 @@ public slots:
 
     // Entities
     QVector<EntityItemID> pasteEntities(const QString& entityHostType, float x, float y, float z);
-    bool exportEntities(const QString& filename, const QVector<QUuid>& entityIDs, const glm::vec3* givenOffset = nullptr);
-    bool exportEntities(const QString& filename, float x, float y, float z, float scale);
+    bool exportEntities(const QString& filename, const QVector<QUuid>& entityIDs, const glm::vec3* givenOffset = nullptr, const QVariantMap& options = QVariantMap());
+    bool exportEntities(const QString& filename, float x, float y, float z, float scale, const QVariantMap& options = QVariantMap());
     bool importEntities(const QString& url, const bool isObservable = true, const qint64 callerId = -1);
 
     void setKeyboardFocusHighlight(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& dimensions);
@@ -698,6 +704,10 @@ private:
 
     // Member Variables
     // The window needs to be initialized early as other initializers try to access it
+#ifndef USE_GL
+    VKWindow* _vkWindow;
+    QWidget *_vkWindowWrapper;
+#endif
     MainWindow* _window;
     // _isMenuInitialized: used to initialize menu early enough before it's needed by other
     // initializers. Fixes a deadlock issue with recent Qt versions.
@@ -760,10 +770,15 @@ private:
 
     Setting::Handle<bool> _firstRun;
     Setting::Handle<QString> _previousScriptLocation;
+    Setting::Handle<int> _previousPreferredDisplayMode;
 
 
     // UI
-    GLCanvas* _glWidget { nullptr };
+#ifdef USE_GL
+    GLCanvas* _primaryWidget{ nullptr };
+#else
+    VKCanvas* _primaryWidget{ nullptr };
+#endif
 
     Overlays _overlays;
     std::shared_ptr<ApplicationOverlay> _applicationOverlay;

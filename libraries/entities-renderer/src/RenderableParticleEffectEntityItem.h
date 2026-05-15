@@ -26,6 +26,8 @@ public:
 
     virtual void renderSimulate(RenderArgs* args) override;
 
+    ComponentMode getFadeOutMode() const override { return ComponentMode::COMPONENT_MODE_DISABLED; }
+
 protected:
     virtual void doRenderUpdateSynchronousTyped(const ScenePointer& scene, Transaction& transaction, const TypedEntityPointer& entity) override;
     virtual void doRenderUpdateAsynchronousTyped(const TypedEntityPointer& entity) override;
@@ -102,7 +104,7 @@ private:
     CpuParticles _cpuParticles;
     bool _emitting { false };
     uint64_t _timeUntilNextEmit { 0 };
-    BufferPointer _particleBuffer { std::make_shared<Buffer>() };
+    BufferPointer _particleBuffer { std::make_shared<Buffer>(gpu::Buffer::VertexBuffer) };
     BufferView _uniformBuffer;
     quint64 _lastSimulated { 0 };
 

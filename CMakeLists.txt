@@ -89,17 +89,13 @@ set(OVERTE_BUILD_TOOLS ON CACHE BOOL "Build tools. Includes Oven, which is used 
 set(OVERTE_BUILD_INSTALLER ON CACHE BOOL "Build installer.")
 set(OVERTE_DISABLE_QML OFF CACHE BOOL "Build without QML. (For graphics debugging.)")
 set(OVERTE_DOWNLOAD_SERVERLESS_CONTENT OFF CACHE BOOL "Download and setup default serverless content beside Interface.")
-# use OpenGL ES on Linux aarch64 and Android.
-if ((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64") OR ANDROID)
-    set(OVERTE_RENDERING_BACKEND "GLES" CACHE STRING "Which rendering backend to compile with. Valid options are: 'OpenGL', 'GLES', and 'Vulkan'.")
-else()
-    set(OVERTE_RENDERING_BACKEND "OpenGL" CACHE STRING "Which rendering backend to compile with. Valid options are: 'OpenGL', 'GLES', and 'Vulkan'.")
-endif()
+set(OVERTE_RENDERING_BACKEND "OpenGL" CACHE STRING "Which rendering backend to compile with. Valid options are: 'OpenGL' and 'Vulkan'.")
 set(OVERTE_EXTERNAL_BUILD_ASSETS "https://build-deps.overte.org" CACHE INTERNAL "")
 set(OVERTE_TIMESERVER_URL "http://timestamp.comodoca.com?td=sha256" CACHE STRING "URL to timeserver used for signing executables.")
 set(OVERTE_USE_OPTIMIZED_IK OFF CACHE BOOL "Use optimized IK.")
 set(OVERTE_DISABLE_KTX_CACHE OFF CACHE BOOL "Disable KTX Cache.")
 set(OVERTE_USE_KHR_ROBUSTNESS OFF CACHE BOOL "Use KHR_robustness.")
+set(OVERTE_USE_SYSTEM_LIBS OFF CACHE BOOL "Build with system dependencies.")
 
 set(OVERTE_BACKTRACE_URL "" CACHE STRING "URL to an endpoint for uploading crash-dumps. For example Sentry.")
 set(OVERTE_BACKTRACE_TOKEN "" CACHE STRING "Token used to identify this build, for use in uploading crash-dumps.")
@@ -141,6 +137,7 @@ if (ANDROID)
   endif()
 else ()
   set(PLATFORM_QT_COMPONENTS WebEngine Xml)
+  add_definitions(-DHAVE_EXT_clip_cull_distance)
 endif()
 
 
@@ -148,18 +145,18 @@ if (OVERTE_USE_KHR_ROBUSTNESS)
   add_definitions(-DUSE_KHR_ROBUSTNESS)
 endif()
 
-if (OVERTE_RENDERING_BACKEND STREQUAL "GLES")
-    add_definitions(-DUSE_GLES)
-    add_definitions(-DGPU_POINTER_STORAGE_SHARED)
-    set(PLATFORM_GL_BACKEND gpu-gl-common gpu-gles)
-elseif (OVERTE_RENDERING_BACKEND STREQUAL "OpenGL")
+if (OVERTE_RENDERING_BACKEND STREQUAL "OpenGL")
     add_definitions(-DGPU_POINTER_STORAGE_RAW)
+    #add_definitions(-DGPU_POINTER_STORAGE_SHARED) is this needed for GLES? or specifically for android?
+    add_definitions(-DUSE_GL)
     set(PLATFORM_GL_BACKEND gpu-gl-common gpu-gl)
 elseif (OVERTE_RENDERING_BACKEND STREQUAL "Vulkan")
-    # TODO
-    message(FATAL_ERROR "Vulkan backend selected, but not implemented yet.")
+    add_definitions(-DGPU_POINTER_STORAGE_RAW)
+    # TODO: remove dependencies on gl libraries for Vulkan builds.
+    set(PLATFORM_GL_BACKEND gpu-gl-common gpu-gl gpu-vk vk)
+    # Vulkan is the default rendering backend, no need to set any flags.
 else()
-    message(FATAL_ERROR "Invalid OVERTE_RENDERING_BACKEND set. Expected 'GLES', 'OpenGL', or 'Vulkan'. Got '${OVERTE_RENDERING_BACKEND}'")
+    message(FATAL_ERROR "Invalid OVERTE_RENDERING_BACKEND set. Expected 'OpenGL', or 'Vulkan'. Got '${OVERTE_RENDERING_BACKEND}'")
 endif()
 
 foreach(PLATFORM_QT_COMPONENT ${PLATFORM_QT_COMPONENTS})
@@ -183,10 +180,6 @@ endif()
 if (OVERTE_DISABLE_KTX_CACHE)
     message(STATUS "KTX cache disabled!")
     add_definitions(-DDISABLE_KTX_CACHE)
-endif()
-
-if (UNIX AND DEFINED ENV{HIFI_MEMORY_DEBUGGING})
-  MESSAGE(STATUS "Memory debugging is enabled")
 endif()
 
 # Set SERVER_ONLY and CLIENT_ONLY for later packaging.
@@ -284,6 +277,12 @@ if (OVERTE_BUILD_CLIENT)
 
   option(USE_SIXENSE "Build Interface with sixense library/plugin" OFF)
   option(USE_NEURON "Build Interface with Neuron library/plugin" OFF)
+  if (OVERTE_USE_SYSTEM_LIBS)
+      set(USE_STEAMWORKS OFF)
+      message(STATUS "Not using STEAMWORKS for system library build.")
+  else()
+      option(USE_STEAMWORKS "Build Interface with steamworks-client library/plugin" ON)
+  endif()
 endif()
 
 if (OVERTE_BUILD_CLIENT OR OVERTE_BUILD_SERVER)
