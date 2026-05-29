@@ -77,7 +77,7 @@ class Overte(ConanFile):
         self.requires("sdl/2.32.10")
         self.requires("steamworks/158a@overte/prebuild")
         self.requires("v-hacd/4.1.0")
-        self.requires("vulkan-memory-allocator/3.0.1")
+        self.requires("vulkan-memory-allocator/cci.20231120")
         self.requires("webrtc-audio-processing/2.1@overte/stable")
         self.requires("zlib/1.3.1")
         self.requires("glm/0.9.9.5", force=True) # FIXME: update to version 1.0.1
