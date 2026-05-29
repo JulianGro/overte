@@ -85,7 +85,7 @@ class Overte(ConanFile):
         openssl = "openssl/1.1.1q"
 
         self.requires("glslang/[>=1.3.268.0 <2.0]")
-        self.requires("spirv-cross/[>=1.3.268.0 <2.0]")
+        self.requires("spirv-cross/[cci.20211113 cci.20211113]")
         self.requires("spirv-tools/[>=1.3.268.0 <2.0]")
 
         if self.options.qt_source == "system":
