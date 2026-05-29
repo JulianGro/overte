@@ -86,7 +86,7 @@ class Overte(ConanFile):
 
         self.requires("glslang/[>=1.3.268.0 <2.0]")
         self.requires("spirv-cross/[>=1.3.268.0 <2.0]")
-        self.requires("spirv-tools/[>=1.3.268.0 <2.0]")
+        self.requires("spirv-tools/[2021.4 2021.4]")
 
         if self.options.qt_source == "system":
             self.requires("qt/5.15.2@overte/system", force=True)
