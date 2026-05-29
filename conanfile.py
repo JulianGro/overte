@@ -89,7 +89,7 @@ class Overte(ConanFile):
         self.requires("spirv-tools/[>=1.3.268.0 <2.0]")
 
         if self.options.qt_source == "system":
-            self.requires("qt/5.15.2@overte/system", force=True)
+            self.requires("qt/6.x@overte/system", force=True)
             if self.settings.os == "Linux":
                 openssl = "openssl/system@anotherfoxguy/stable"
         elif self.options.qt_source == "aqt":
