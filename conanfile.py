@@ -62,7 +62,7 @@ class Overte(ConanFile):
         self.requires("gifcreator/2016.11@overte/stable")
         self.requires("glad/0.1.36") # NOTE: glad 2 is released
         self.requires("gli/cci.20210515") # NOTE: not maintained for 4 years
-        self.requires("liblo/0.30@overte/stable")
+        self.requires("liblo/0.35@overte/stable")
         self.requires("libnode/22.22.0@overte/stable#1f75a2b0272c5e3ad9d4ddb432a467f8")
         self.requires("nlohmann_json/3.11.2")
         self.requires("nvidia-texture-tools/2023.01@overte/stable#f4eff53a38bd2c26eb6fa1206ffd22f6")
