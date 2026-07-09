@@ -413,6 +413,11 @@ glm::mat4 OpenVrDisplayPlugin::getCullingProjection(const glm::mat4& baseProject
     // const float maxAngle = 0.9f * PI;
     const float margin = 1.0f;
 
+    qDebug() << std::min(fovs[0][0], fovs[1][0]) * margin << " Left min FOV";
+    qDebug() << std::min(fovs[0][0], fovs[1][0]) * margin << " Right max FOV";
+    qDebug() << std::min(fovs[0][0], fovs[1][0]) * margin << " Bottom (flipped) min FOV";
+    qDebug() << std::min(fovs[0][0], fovs[1][0]) * margin << " Top (flipped) min FOV";
+
     std::array<float, 4> fovMax = {
         std::min(fovs[0][0], fovs[1][0]) * margin, // left
         std::max(fovs[0][1], fovs[1][1]) * margin, // right
