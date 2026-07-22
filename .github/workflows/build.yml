@@ -340,3 +340,31 @@ jobs:
     - name: Output debug information
       if: always()
       uses: ./.github/actions/debug-info
+
+    - name: Generate Conan lockfile of current configuration
+      id: conan_lockfile_step
+      if: github.event_name == 'schedule' && matrix.id == 'windows' || matrix.id == 'ubuntu-opengl-amd64'
+      shell: bash
+      run: |
+        conan lock create . -s build_type=${{matrix.cmake_build_type}} -b missing -pr:a=${{env.CONAN_PROFILE}} -o "&:qt_source=${{matrix.qt_source}}" --lockfile-out=${{ matrix.id }}.lock --lockfile-clean
+        echo "conan_lockfile_${{ matrix.id }}=${cat ${{ matrix.id }}.lock}" >> $GITHUB_OUTPUT
+
+  commit_new_lockfile:
+    runs-on: ubuntu-latest
+    name: Merge and commit Conan lockfiles.
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check if the latest commit was created less than a day ago.
+        id: check_latest_commit
+        run: |
+          if git rev-list --after="24 hours 5 minutes" ${{ github.sha }} | grep -q "${{ github.sha }}"; then
+            echo "Our latest commit is less than a day old. Continuing…"
+            echo "skip_nightly_build=False" >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" = "schedule" ]; then
+            echo "Our latest commit is older than a day. Skipping Nightly build…"
+            echo "skip_nightly_build=True" >> $GITHUB_OUTPUT
+          else
+            echo "Not a scheduled Nightly build. Continuing…"
+            echo "skip_nightly_build=False" >> $GITHUB_OUTPUT
+          fi
