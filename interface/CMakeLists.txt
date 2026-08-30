@@ -110,10 +110,27 @@ qt5_wrap_ui(QT_UI_HEADERS "${QT_UI_FILES}")
 # add them to the interface source files
 set(INTERFACE_SRCS ${INTERFACE_SRCS} "${QT_UI_HEADERS}" "${QT_RESOURCES}")
 
-# translation disabled until we strip out the line numbers
-# set(QM ${TARGET_NAME}_en.qm)
-# set(TS ${TARGET_NAME}_en.ts)
-# qt5_create_translation_custom(${QM} ${INTERFACE_SRCS} ${QT_UI_FILES} ${TS})
+# TODO: translation disabled until we strip out the line numbers
+#set(QM ${TARGET_NAME}_en.qm)
+#set(TS ${TARGET_NAME}_en.ts)
+#qt5_create_translation_custom(${QM} ${INTERFACE_SRCS} ${QT_UI_FILES} ${TS})
+
+#
+# Translations
+#
+find_package(Qt5 REQUIRED COMPONENTS LinguistTools)
+
+file(GLOB TS_FILES interface_*.ts
+set(INTERFACE_LOCALE_DIR ${CMAKE_SOURCE_DIR}/interface/locales)
+set(TS_FILES
+        ${INTERFACE_LOCALE_DIR}/en.ts
+        ${INTERFACE_LOCALE_DIR}/de.ts)
+
+# TODO: Add .qm files to Qt resources?
+
+qt5_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
+# https://github.com/pozemka/cmake-qt-translation-example/blob/main/CMakeLists.txt
+
 
 # setup the android parameters that will help us produce an APK
 if (ANDROID)
