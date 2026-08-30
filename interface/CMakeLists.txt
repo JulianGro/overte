@@ -110,10 +110,48 @@ qt6_wrap_ui(QT_UI_HEADERS "${QT_UI_FILES}")
 # add them to the interface source files
 set(INTERFACE_SRCS ${INTERFACE_SRCS} "${QT_UI_HEADERS}" "${QT_RESOURCES}")
 
-# translation disabled until we strip out the line numbers
+
+#
+# Translation
+#
+find_package(Qt6 REQUIRED QUIET COMPONENTS LinguistTools)
+
+qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES de)
+#qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES de es fr ko lt pt ru jp zh_Hant)
+
+# FIXME: This will likely fail on macOS due to different TARGET names.
+# https://doc.qt.io/qt-6/localization.html#deploy-translations
+#qt6_add_translations(interface QM_FILES_OUTPUT_VARIABLE QM_FILES)
+qt6_add_translations(interface)
+
+# TODO: Install the QM translation files.
+#install(FILES ${QML_FILES} DESTINATION
+
 # set(QM ${TARGET_NAME}_en.qm)
 # set(TS ${TARGET_NAME}_en.ts)
 # qt6_create_translation_custom(${QM} ${INTERFACE_SRCS} ${QT_UI_FILES} ${TS})
+
+
+${CMAKE_SOURCE_DIR}/interface/resources/qml
+
+/home/juliangro/git/overte/interface/resources/qml/overte/avatar_picker/qmldir
+
+qt_add_qml_module(AvatarPicker
+    URI AvatarPicker
+    QML_FILES
+        MainPage.qml
+        AvatarItem.qml
+        AvatarPicker.qml
+)
+
+qt_add_translations(appmultilingual_demo
+    TS_FILE_BASE qml
+    TS_FILE_DIR i18n
+    RESOURCE_PREFIX /qt/qml/multilingual_demo/i18n
+)
+
+
+
 
 # setup the android parameters that will help us produce an APK
 if (ANDROID)
